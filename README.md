@@ -1,20 +1,4 @@
-# myecs
-
-TODO: Write a description here
-
-## Installation
-
-1. Add the dependency to your `shard.yml`:
-
-   ```yaml
-   dependencies:
-     myecs:
-       github: your-github-user/myecs
-   ```
-
-2. Run `shards install`
-
-## Usage
+# MyECS
 
 ## Main parts of ecs
 
