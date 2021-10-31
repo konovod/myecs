@@ -208,13 +208,32 @@ class SystemGenerateEvent(Event) < ECS::System
   end
 end
 
+class CountAllOf(Event) < ECS::System
+  def filter(world)
+    world.of(Event)
+  end
+
+  property value = 0
+
+  def process(entity)
+    @value += 1
+  end
+
+  def execute
+    @value = 0
+  end
+end
+
 class SystemPassEvents < ECS::Systems
   def initialize(@world)
     super
     add SystemGenerateEvent(TestEvent1).new(@world, @world.of(Comp1))
     add SystemGenerateEvent(TestEvent2).new(@world, @world.of(Comp2))
     add SystemGenerateEvent(TestEvent3).new(@world, @world.all_of([TestEvent1, TestEvent2]))
-    # add SystemGenerateEvent(TestEvent1).new(@world, @world.of(TestEvent3))
+    add ECS::RemoveAllOf(TestEvent1).new(@world)
+    add ECS::RemoveAllOf(TestEvent2).new(@world)
+    add CountAllOf(TestEvent3).new(@world)
+    add ECS::RemoveAllOf(TestEvent3).new(@world)
   end
 end
 
@@ -238,16 +257,18 @@ BENCH_N      = 1000000
 BENCH_WARMUP =       1
 BENCH_TIME   =       2
 
-Benchmark.ips(warmup: BENCH_WARMUP, calculation: BENCH_TIME) do |bm|
-  bm.report("create empty world") do
-    world = ECS::World.new
-  end
-  bm.report("create benchmark world") do
-    world = init_benchmark_world(BENCH_N)
-  end
-  bm.report("create and clear benchmark world") do
-    world = init_benchmark_world(BENCH_N)
-    world.delete_all
+def benchmark_creation
+  Benchmark.ips(warmup: BENCH_WARMUP, calculation: BENCH_TIME) do |bm|
+    bm.report("create empty world") do
+      world = ECS::World.new
+    end
+    bm.report("create benchmark world") do
+      world = init_benchmark_world(BENCH_N)
+    end
+    bm.report("create and clear benchmark world") do
+      world = init_benchmark_world(BENCH_N)
+      world.delete_all
+    end
   end
 end
 
@@ -260,7 +281,6 @@ def benchmark_list(list)
       sys.add(cls.new(world))
       sys.init
       sys.execute
-      world.clear_single_frame
       bm.report(cls.to_s) do
         sys.execute
       end
@@ -268,6 +288,8 @@ def benchmark_list(list)
     end
   end
 end
+
+benchmark_creation
 
 benchmark_list [
   EmptySystem,

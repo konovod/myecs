@@ -95,7 +95,37 @@ end
 
 ### Special components
 
-annotation `@[ECS::SingleFrame]` is for components that have to live 1 frame (usually - events). They are automatically deleted once execution comes back to system that spawned them. If any of them was added outside `ECS::Systems.execute`, you should call `world.clear_single_frame` to remove them (or you can call it periodically, because it won't do anything bad and just quits if there are no orphane events). 
+annotation `@[ECS::SingleFrame]` is for components that have to live 1 frame (usually - events). The main difference is that they are supposed to be deleted at once, so their storage can be simplified (no need to track free indexes). They should be deleted by adding `ECS::RemoveAllOf(T)` system in a right place of systems list.
+
+```crystal
+require "./src/myecs"
+
+@[ECS::MultipleComponents]
+@[ECS::SingleFrame]
+record SomeRequest < ECS::Component, data : String
+
+class ExecuteSomeRequestsSystem < ECS::System
+  def filter(world) : ECS::Filter?
+    world.of(SomeRequest)
+  end
+
+  def process(ent)
+    req = ent.getSomeRequest
+    puts "request #{req.data} called for #{ent}"
+  end
+end
+
+world = ECS::World.new
+systems = ECS::Systems.new(world)
+  .add(ExecuteSomeRequestsSystem.new(world))
+  .add(ECS::RemoveAllOf(SomeRequest).new(world))
+systems.init
+# now you can add multiple SomeRequest to the same entity
+world.new_entity.add(SomeRequest.new("First")).add(SomeRequest.new("Second"))
+systems.execute
+```
+Note above example also shows the use of `@[ECS::MultipleComponents]`. This is for components that can be added multiple times. They have some limitations though - filters can't iterate over several of components with this annotation (as this would usually mean cartesian product, unlikely needed in practice) and there is no way to get multiple components outside of filter (planned).
+
 
 annotation `@[ECS::SingletonComponent]` is for data sharing. It creates component that is considered present on every entity (iteration on it isn't possible though). So you can do
 
@@ -261,30 +291,30 @@ You can see I'm not actually beating it in all areas (I'm much slower in access 
 my ECS:
 ```
 ***********************************************
-              create empty world 108.74k (  9.20µs) (±10.72%)  200kB/op           fastest
-          create benchmark world   2.26  (443.06ms) (± 9.95%)  284MB/op  48179.21× slower
-create and clear benchmark world   2.16  (463.07ms) (± 4.73%)  284MB/op  50354.73× slower
+              create empty world 220.80k (  4.53µs) (± 7.40%)  20.4kB/op           fastest
+          create benchmark world   5.64  (177.41ms) (± 1.33%)   237MB/op  39173.20× slower
+create and clear benchmark world   5.44  (183.69ms) (± 5.65%)   237MB/op  40558.89× slower
 ***********************************************
-                   EmptySystem 137.90M (  7.25ns) (± 2.00%)  0.0B/op         fastest
-             EmptyFilterSystem  14.91M ( 67.07ns) (± 0.79%)  0.0B/op    9.25× slower
-SystemAddDeleteSingleComponent   3.44M (290.35ns) (±16.52%)  0.0B/op   40.04× slower
- SystemAddDeleteFourComponents 726.69k (  1.38µs) (± 7.42%)  0.0B/op  189.76× slower
-         SystemAskComponent(0)  42.82M ( 23.36ns) (± 1.03%)  0.0B/op    3.22× slower
-         SystemAskComponent(1)  41.89M ( 23.87ns) (± 0.99%)  0.0B/op    3.29× slower
-         SystemGetComponent(0)  45.44M ( 22.01ns) (± 2.62%)  0.0B/op    3.03× slower
-         SystemGetComponent(1)  35.27M ( 28.35ns) (± 2.93%)  0.0B/op    3.91× slower
-   SystemGetSingletonComponent  58.78M ( 17.01ns) (± 2.08%)  0.0B/op    2.35× slower
+                   EmptySystem 114.69M (  8.72ns) (± 3.22%)  0.0B/op        fastest
+             EmptyFilterSystem  21.16M ( 47.26ns) (± 1.69%)  0.0B/op   5.42× slower
+SystemAddDeleteSingleComponent   6.36M (157.19ns) (±18.46%)  0.0B/op  18.03× slower
+ SystemAddDeleteFourComponents   1.40M (712.04ns) (± 8.79%)  0.0B/op  81.66× slower
+         SystemAskComponent(0)  50.15M ( 19.94ns) (± 2.64%)  0.0B/op   2.29× slower
+         SystemAskComponent(1)  49.66M ( 20.14ns) (± 2.34%)  0.0B/op   2.31× slower
+         SystemGetComponent(0)  54.97M ( 18.19ns) (± 2.74%)  0.0B/op   2.09× slower
+         SystemGetComponent(1)  35.00M ( 28.57ns) (± 3.61%)  0.0B/op   3.28× slower
+   SystemGetSingletonComponent  87.45M ( 11.43ns) (± 3.68%)  0.0B/op   1.31× slower
 ***********************************************
-         SystemCountComp1  26.00  ( 38.46ms) (± 2.07%)  0.0B/op        fastest
-        SystemUpdateComp1  11.36  ( 88.06ms) (± 1.39%)  0.0B/op   2.29× slower
-SystemUpdateComp1UsingPtr  19.58  ( 51.06ms) (± 1.96%)  0.0B/op   1.33× slower
-       SystemReplaceComp1   4.18  (239.06ms) (± 1.82%)  0.0B/op   6.22× slower
-         SystemPassEvents   2.13  (469.74ms) (± 0.43%)  0.0B/op  12.21× slower
+         SystemCountComp1 229.22  (  4.36ms) (± 0.43%)  0.0B/op        fastest
+        SystemUpdateComp1  91.34  ( 10.95ms) (± 0.66%)  0.0B/op   2.51× slower
+SystemUpdateComp1UsingPtr 183.67  (  5.44ms) (± 0.87%)  0.0B/op   1.25× slower
+       SystemReplaceComp1   8.58  (116.60ms) (± 3.35%)  0.0B/op  26.73× slower
+         SystemPassEvents  10.71  ( 93.40ms) (± 1.37%)  0.0B/op  21.41× slower
 ***********************************************
-         FullFilterSystem  19.07  ( 52.43ms) (± 2.08%)  0.0B/op        fastest
-    FullFilterAnyOfSystem   8.12  (123.19ms) (± 1.17%)  0.0B/op   2.35× slower
-      SystemComplexFilter  18.01  ( 55.54ms) (± 1.80%)  0.0B/op   1.06× slower
-SystemComplexSelectFilter  17.86  ( 56.01ms) (± 1.25%)  0.0B/op   1.07× slower
+         FullFilterSystem  12.53  ( 79.80ms) (± 1.41%)  0.0B/op   2.21× slower
+    FullFilterAnyOfSystem  12.78  ( 78.24ms) (± 2.18%)  0.0B/op   2.16× slower
+      SystemComplexFilter  27.55  ( 36.30ms) (± 0.90%)  0.0B/op   1.00× slower
+SystemComplexSelectFilter  27.63  ( 36.19ms) (± 4.26%)  0.0B/op        fastest
 ***********************************************
 ```
 Entitas.cr (it is slightly outdated so you will have problems to make it work)

@@ -323,20 +323,6 @@ describe ECS::Systems do
     sys2.execute_called.should eq 2
     ent.getPos.x.should eq 10 + 10 + 1
   end
-
-  it "delete single frame events" do
-    world = ECS::World.new
-    filter = world.of(TestEvent)
-    ent = world.new_entity.add(TestEvent.new)
-    count_entities(filter).should eq 1
-    filter2 = world.of(Pos)
-    ent2 = world.new_entity.add(Pos.new(2, 2))
-    count_entities(filter2).should eq 1
-
-    world.clear_single_frame
-    count_entities(filter).should eq 0
-    count_entities(filter2).should eq 1
-  end
 end
 
 @[ECS::SingleFrame]
@@ -356,6 +342,18 @@ class ReplaceEventsSystem(EventFrom, EventTo) < ECS::System
   end
 end
 
+class CountAllOf(Event) < ECS::System
+  def filter(world)
+    world.of(Event)
+  end
+
+  property value = 0
+
+  def process(entity)
+    @value += 1
+  end
+end
+
 class GenerateEventsSystem(Event) < ECS::System
   def execute
     @world.new_entity.add(Event.new)
@@ -369,77 +367,29 @@ class GenerateEventsInInitSystem(Event) < ECS::System
 end
 
 describe ECS::SingleFrame do
-  it "deleted in correct order" do
+  it "deleted correctly" do
     world = ECS::World.new
-    sys1 = ReplaceEventsSystem(TestEvent2, TestEvent3).new(world)
-    sys2 = ReplaceEventsSystem(TestEvent1, TestEvent2).new(world)
-    sys3 = GenerateEventsSystem(TestEvent1).new(world)
-    systems = ECS::Systems.new(world).add(sys1).add(sys2).add(sys3)
-    ev1_check = world.of(TestEvent1)
-    ev2_check = world.of(TestEvent2)
-    ev3_check = world.of(TestEvent3)
-    systems.init
-    sys3.active = true
-    systems.execute
-    world.clear_single_frame
-    ev1_check.find_entity?.should be_truthy
-    ev2_check.find_entity?.should be_falsey
-    ev3_check.find_entity?.should be_falsey
-    sys3.active = false
-    systems.execute
-    ev1_check.find_entity?.should be_falsey
-    ev2_check.find_entity?.should be_truthy
-    ev3_check.find_entity?.should be_falsey
-    systems.execute
-    ev1_check.find_entity?.should be_falsey
-    ev2_check.find_entity?.should be_falsey
-    ev3_check.find_entity?.should be_truthy
-    systems.execute
-    ev1_check.find_entity?.should be_falsey
-    ev2_check.find_entity?.should be_falsey
-    ev3_check.find_entity?.should be_falsey
-  end
-
-  it "deleted in correct order #2" do
-    world = ECS::World.new
-    sys1 = ReplaceEventsSystem(Pos, TestEvent1).new(world)
-    sys2 = ReplaceEventsSystem(TestEvent1, TestEvent2).new(world)
-    systems = ECS::Systems.new(world).add(sys1).add(sys2)
-    ev1_check = world.of(TestEvent1)
-    ev2_check = world.of(TestEvent2)
-    world.new_entity.add(Pos.new(0, 0))
-    world.new_entity.add(Pos.new(1, 1))
+    counter_before = CountAllOf(TestEvent3).new(world)
+    counter_after = CountAllOf(TestEvent3).new(world)
+    systems = ECS::Systems.new(world)
+      .add(ReplaceEventsSystem(TestEvent2, TestEvent3).new(world))
+      .add(ECS::RemoveAllOf(TestEvent2).new(world))
+      .add(counter_before)
+      .add(ECS::RemoveAllOf(TestEvent3).new(world))
+      .add(counter_before)
+      .add(ReplaceEventsSystem(TestEvent1, TestEvent2).new(world))
+      .add(ECS::RemoveAllOf(TestEvent1).new(world))
+      .add(GenerateEventsSystem(TestEvent1).new(world))
     systems.init
     systems.execute
-    count_entities(ev1_check).should eq 2
-    count_entities(ev2_check).should eq 2
+    counter_before.value.should eq 0
+    counter_after.value.should eq 0
     systems.execute
-    count_entities(ev1_check).should eq 2
-    count_entities(ev2_check).should eq 2
-    sys1.active = false
+    counter_before.value.should eq 0
+    counter_after.value.should eq 0
     systems.execute
-    count_entities(ev1_check).should eq 0
-    count_entities(ev2_check).should eq 0
-  end
-
-  it "deleted in correct order when generated in init" do
-    world = ECS::World.new
-    sys1 = GenerateEventsInInitSystem(TestEvent1).new(world)
-    sys2 = ReplaceEventsSystem(TestEvent1, TestEvent2).new(world)
-    systems = ECS::Systems.new(world).add(sys1).add(sys2)
-    ev1_check = world.of(TestEvent1)
-    ev2_check = world.of(TestEvent2)
-    systems.init
-    ev1_check.find_entity?.should be_truthy
-    ev2_check.find_entity?.should be_falsey
-    systems.execute
-    world.clear_single_frame
-    ev1_check.find_entity?.should be_falsey
-    ev2_check.find_entity?.should be_truthy
-    systems.execute
-    world.clear_single_frame
-    ev1_check.find_entity?.should be_falsey
-    ev2_check.find_entity?.should be_falsey
+    counter_before.value.should eq 1
+    counter_after.value.should eq 0
   end
 end
 
@@ -473,5 +423,230 @@ describe ECS::SingletonComponent do
     world.new_entity.add(Config.new(100))
     count_entities(world).should eq 1
     count_entities(world.of(Config)).should eq 0
+  end
+end
+
+class SystemGenerateEvent(Event) < ECS::System
+  @fixed_filter : ECS::Filter?
+
+  def initialize(@world, @fixed_filter = nil)
+    super(@world)
+  end
+
+  def filter(world)
+    @fixed_filter.not_nil!
+  end
+
+  def process(entity)
+    entity.add(Event.new)
+  end
+end
+
+describe ECS do
+  it "don't trigger bug with iterating events" do
+    world = ECS::World.new
+    1025.times { |i|
+      ent = world.new_entity.add(Pos.new(0, 0))
+      ent = world.new_entity.add(Speed.new(0, 0))
+      ent = world.new_entity.add(Pos.new(0, 0)).add(Speed.new(0, 0))
+    }
+    sys1 = SystemGenerateEvent(TestEvent1).new(world, world.of(Pos))
+    sys2 = SystemGenerateEvent(TestEvent2).new(world, world.of(Speed))
+    sys3 = SystemGenerateEvent(TestEvent3).new(world, world.all_of([TestEvent1, TestEvent2]))
+    sys4 = CountAllOf(TestEvent3).new(world)
+    systems = ECS::Systems.new(world).add(sys1).add(sys2).add(sys3).add(sys4)
+      .add(ECS::RemoveAllOf(TestEvent1).new(world))
+      .add(ECS::RemoveAllOf(TestEvent2).new(world))
+      .add(ECS::RemoveAllOf(TestEvent3).new(world))
+    systems.init
+    systems.execute
+    systems.execute
+    systems.execute
+  end
+end
+
+@[ECS::MultipleComponents]
+record Changer < ECS::Component, dx : Int32, dy : Int32
+
+@[ECS::MultipleComponents]
+@[ECS::SingleFrame]
+record Request < ECS::Component, dx : Int32, dy : Int32
+
+class ProcessRequests < ECS::System
+  def filter(world)
+    world.all_of([Request, Pos])
+  end
+
+  def process(entity)
+    pos = entity.getPos
+    req = entity.getRequest
+    entity.set(Pos.new(pos.x + req.dx, pos.y + req.dy))
+  end
+end
+
+class ProcessChangers < ECS::System
+  def filter(world)
+    world.all_of([Changer, Pos])
+  end
+
+  def process(entity)
+    pos = entity.getPos
+    req = entity.getChanger
+    entity.set(Pos.new(pos.x + req.dx, pos.y + req.dy))
+  end
+end
+
+class GenerateRequests < ECS::System
+  def initialize(@world, @list : Array(Int32))
+  end
+
+  def filter(world)
+    world.of(Pos)
+  end
+
+  def process(entity)
+    @list.each { |x| entity.add(Request.new(x, 0)) }
+  end
+end
+
+describe ECS::MultipleComponents do
+  it "can be added" do
+    world = ECS::World.new
+    ent = world.new_entity
+    ent.has?(Changer).should be_false
+    ent.add(Pos.new(0, 0))
+    ent.has?(Changer).should be_false
+    ent.add(Changer.new(1, 1))
+    ent.has?(Changer).should be_true
+    ent.add(Changer.new(2, 2))
+    ent.has?(Changer).should be_true
+  end
+
+  it "can be added and then removed" do
+    world = ECS::World.new
+    ent = world.new_entity
+    ent.add(Pos.new(0, 0))
+    ent.add(Changer.new(1, 1))
+    ent.add(Changer.new(2, 2))
+    ent.has?(Changer).should be_true
+    ent.remove(Changer, all: false)
+    ent.has?(Changer).should be_true
+    ent.remove(Changer)
+    ent.has?(Changer).should be_false
+  end
+
+  it "can be added and then all removed" do
+    world = ECS::World.new
+    ent = world.new_entity
+    ent.add(Pos.new(0, 0))
+    ent.add(Changer.new(1, 1))
+    ent.add(Changer.new(2, 2))
+    ent.has?(Changer).should be_true
+    ent.remove(Changer, all: true)
+    ent.has?(Changer).should be_false
+    expect_raises(Exception) { ent.remove(Changer) }
+  end
+
+  it "can be iterated" do
+    world = ECS::World.new
+    ent = world.new_entity
+    ent.add(Pos.new(0, 0))
+    ent.add(Changer.new(1, 1))
+    ent.add(Changer.new(2, 2))
+    count_entities(world.of(Changer)).should eq 2
+    count_entities(world.of(Pos)).should eq 1
+  end
+
+  it "can be iterated in combination with usual components" do
+    world = ECS::World.new
+    ent = world.new_entity
+    ent.add(Pos.new(0, 0))
+    ent.add(Changer.new(1, 1))
+    ent.add(Changer.new(2, 2))
+    ent = world.new_entity
+    ent.add(Changer.new(3, 3))
+    ent = world.new_entity
+    ent.add(Changer.new(4, 4))
+    count_entities(world.any_of([Changer, Pos])).should eq 4
+    count_entities(world.any_of([Pos, Changer])).should eq 4
+    count_entities(world.all_of([Changer, Pos])).should eq 2
+    count_entities(world.all_of([Pos, Changer])).should eq 2
+  end
+
+  it "can be iterated in combination with usual components #2" do
+    world = ECS::World.new
+    ent = world.new_entity
+    ent.add(Pos.new(0, 0))
+    ent.add(Changer.new(1, 1))
+    ent.add(Changer.new(2, 2))
+    ent.add(Speed.new(0, 0))
+    ent = world.new_entity
+    ent.add(Changer.new(3, 3))
+    ent.add(Speed.new(0, 0))
+    ent = world.new_entity
+    ent.add(Changer.new(4, 4))
+    ent.add(Speed.new(0, 0))
+    count_entities(world.of(Speed).any_of([Pos, Changer])).should eq 4
+  end
+
+  it "can't be iterated when several of them present in filter" do
+    world = ECS::World.new
+    expect_raises(Exception) { world.any_of([Changer, Request]) }
+    expect_raises(Exception) { world.all_of([Changer, Request]) }
+    expect_raises(Exception) { world.of(Changer).of(Request) }
+    expect_raises(Exception) { world.any_of([Changer, Pos]).any_of([Request, Speed]) }
+    count_entities(world.of(Changer).exclude(Request)).should eq 0
+  end
+
+  it "can be processed with systems" do
+    world = ECS::World.new
+    systems = ECS::Systems.new(world)
+      .add(ProcessChangers.new(world))
+    systems.init
+    ent = world.new_entity
+    ent.add(Pos.new(0, 0))
+    ent.add(Changer.new(1, 0))
+    ent.add(Changer.new(10, 0))
+    systems.execute
+    ent.getPos.x.should eq 11
+    systems.execute
+    ent.getPos.x.should eq 22
+  end
+
+  it "can be processed with systems (single-frame)" do
+    world = ECS::World.new
+    systems = ECS::Systems.new(world)
+      .add(GenerateRequests.new(world, [10, 1]))
+      .add(ProcessRequests.new(world))
+      .add(ECS::RemoveAllOf(Request).new(world))
+    systems.init
+    ent = world.new_entity
+    ent.add(Pos.new(0, 0))
+    ent.add(Changer.new(1, 0))
+    ent.add(Changer.new(10, 0))
+    systems.execute
+    ent.getPos.x.should eq 11
+    systems.execute
+    ent.getPos.x.should eq 22
+    systems.execute
+    ent.getPos.x.should eq 33
+  end
+
+  it "can be processed with systems (single-frame) when requests come from different systems" do
+    world = ECS::World.new
+    systems = ECS::Systems.new(world)
+      .add(GenerateRequests.new(world, [10]))
+      .add(ProcessRequests.new(world))
+      .add(ECS::RemoveAllOf(Request).new(world))
+      .add(GenerateRequests.new(world, [1]))
+    systems.init
+    ent = world.new_entity
+    ent.add(Pos.new(0, 0))
+    systems.execute
+    ent.getPos.x.should eq 10
+    systems.execute
+    ent.getPos.x.should eq 21
+    systems.execute
+    ent.getPos.x.should eq 32
   end
 end
