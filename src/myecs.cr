@@ -105,9 +105,9 @@ module ECS
   class Pool(T) < BasePool
     @size : Int32
     @used : Int32 = 0
-    @raw : Pointer(T)
-    @corresponding : Pointer(EntityID)
-    @next_component = Pointer(Int32).null
+    @raw : Slice(T)
+    @corresponding : Slice(EntityID)
+    @next_component = Slice(Int32).new(0)
     @sparse = Hash(EntityID, Int32).new
     @free_items = LinkedList.new(1)
     @unsafe_iterating = 0
@@ -123,10 +123,10 @@ module ECS
       {% if T.annotation(ECS::SingletonComponent) %}
         @size = 1
       {% end %}
-      @raw = Pointer(T).malloc(@size)
-      @corresponding = Pointer(EntityID).malloc(@size)
+      @raw = Pointer(T).malloc(@size).to_slice(@size)
+      @corresponding = Pointer(EntityID).malloc(@size).to_slice(@size)
       {% if T.annotation(ECS::MultipleComponents) %}
-        @next_component = Pointer(Int32).malloc(@size)
+        @next_component = Pointer(Int32).malloc(@size).to_slice(@size)
       {% end %}
 
       {% if !T.annotation(ECS::SingleFrame) %}
@@ -173,13 +173,13 @@ module ECS
     private def grow
       old_size = @size
       @size = @size * 2
-      @raw = @raw.realloc(@size)
-      @corresponding = @corresponding.realloc(@size)
+      @raw = @raw.to_unsafe.realloc(@size).to_slice(@size)
+      @corresponding = @corresponding.to_unsafe.realloc(@size).to_slice(@size)
       (old_size...@size).each do |i|
         @corresponding[i] = NO_ENTITY
       end
       {% if T.annotation(ECS::MultipleComponents) %}
-        @next_component = @next_component.realloc(@size)
+        @next_component = @next_component.to_unsafe.realloc(@size).to_slice(@size)
         (old_size...@size).each do |i|
           @next_component[i] = 0
         end
@@ -204,7 +204,6 @@ module ECS
         raise "can't remove singleton from #{self.class}" if @used == 0
         @used = 0
       {% else %}
-
         raise "can't remove component from #{self.class}" unless has_component?(entity)
         item = entity_to_id(entity.id)
         @corresponding[item] = NO_ENTITY
@@ -348,9 +347,9 @@ module ECS
 
     def get_component_ptr(entity)
       {% if T.annotation(ECS::SingletonComponent) %}
-        pointer
+        pointer.to_unsafe
       {% else %}
-        pointer + entity_to_id entity.id
+        (pointer + entity_to_id entity.id).to_unsafe
       {% end %}
     end
 
