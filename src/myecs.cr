@@ -179,6 +179,7 @@ module ECS
         @corresponding[i] = NO_ENTITY
       end
       {% if T.annotation(ECS::MultipleComponents) %}
+        @next_component = @next_component.realloc(@size)
         (old_size...@size).each do |i|
           @next_component[i] = 0
         end
@@ -237,6 +238,7 @@ module ECS
             end
           end
         {% end %}
+        @cache_index = -1 if entity.id == @cache_entity
         @sparse.delete entity.id
         release_index item
       {% end %}
@@ -269,6 +271,7 @@ module ECS
         @cache_index = -1
       {% else %}
         if @used >= @size / 4
+          @size.times { |i| @corresponding[i] = NO_ENTITY }
           @sparse.clear
           @free_items.clear
           @used = 0
