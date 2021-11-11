@@ -288,11 +288,11 @@ module ECS
 
     def add_component_without_check(entity : Entity, item)
       {% if T.annotation(ECS::SingletonComponent) %}
-        pointer[0] = item.as(T)
+        pointer[0] = item.as(Component).as(T)
         @used = 1
       {% else %}
         fresh = get_free_index
-        pointer[fresh] = item.as(T)
+        pointer[fresh] = item.as(Component).as(T)
 
         {% if T.annotation(ECS::MultipleComponents) %}
           if @sparse.has_key? entity.id
@@ -316,9 +316,9 @@ module ECS
     def update_component(entity, comp)
       {% if T.annotation(ECS::SingletonComponent) %}
         @used = 1
-        pointer[0] = comp.as(T)
+        pointer[0] = comp.as(Component).as(T)
       {% else %}
-        pointer[entity_to_id(entity.id)] = comp.as(T)
+        pointer[entity_to_id(entity.id)] = comp.as(Component).as(T)
       {% end %}
     end
 
@@ -336,7 +336,7 @@ module ECS
     def add_or_update_component(entity, comp)
       {% if T.annotation(ECS::SingletonComponent) %}
         @used = 1
-        pointer[0] = comp.as(T)
+        pointer[0] = comp.as(Component).as(T)
       {% else %}
         if has_component?(entity)
           update_component(entity, comp)
@@ -593,6 +593,8 @@ module ECS
     def each_entity(& : Entity ->)
       smallest_all_count = 0
       smallest_any_count = 0
+      smallest_all = nil
+      smallest_any = nil
 
       if all = @all_multiple_component
         smallest_all = all
