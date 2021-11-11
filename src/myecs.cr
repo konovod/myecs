@@ -412,6 +412,10 @@ module ECS
       @processed.clear
     end
 
+    def component_exists?(typ)
+      base_pool_for(typ).total_count > 0
+    end
+
     macro finished
       def init_pools
         {% for obj, index in Component.all_subclasses %} 
