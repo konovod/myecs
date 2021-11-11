@@ -284,7 +284,7 @@ def benchmark_list(list)
       bm.report(cls.to_s) do
         sys.execute
       end
-      sys.teardown
+      # sys.teardown fails due to bm imlementation?
     end
   end
 end
