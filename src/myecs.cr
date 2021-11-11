@@ -77,7 +77,7 @@ module ECS
       {% for obj, index in Component.all_subclasses %} 
       {% obj_name = obj.id.split("::").last.id %}
       def get{{obj_name}}
-        @world.pools[{{index}}].as(Pool({{obj}})).get_component(self)
+      @world.pools[{{index}}].as(Pool({{obj}})).get_component?(self) || raise "{{obj}} not present on entity #{self}"
       end
   
       def get{{obj_name}}?
@@ -302,15 +302,6 @@ module ECS
         @cache_entity = entity.id
         @cache_index = fresh
         @corresponding[fresh] = entity.id
-      {% end %}
-    end
-
-    def get_component(entity)
-      {% if T.annotation(ECS::SingletonComponent) %}
-        raise " #{T} was not initialized" if @used == 0
-        pointer[0]
-      {% else %}
-        pointer[entity_to_id entity.id]
       {% end %}
     end
 
@@ -697,6 +688,7 @@ module ECS
     end
 
     def execute
+      raise "#{@children.map(&.class)} wasn't initialized" unless @started
       @world.cur_systems = self
       @children.zip(@filters) do |sys, filter|
         @cur_child = sys
