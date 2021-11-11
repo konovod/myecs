@@ -1,5 +1,3 @@
-require "./utils"
-
 module ECS
   annotation SingleFrame
   end
@@ -109,7 +107,6 @@ module ECS
     @corresponding : Slice(EntityID)
     @next_component = Slice(Int32).new(0)
     @sparse = Hash(EntityID, Int32).new
-    @free_items = LinkedList.new(1)
     @unsafe_iterating = 0
 
     @cache_entity : EntityID = NO_ENTITY
@@ -128,10 +125,6 @@ module ECS
       {% if T.annotation(ECS::MultipleComponents) %}
         @next_component = Pointer(Int32).malloc(@size).to_slice(@size)
       {% end %}
-
-      {% if !T.annotation(ECS::SingleFrame) %}
-        @free_items = LinkedList.new(@size)
-      {% end %}
     end
 
     def name
@@ -149,21 +142,17 @@ module ECS
     private def get_free_index : Int32
       @used += 1
       grow if @used >= @size
-      {% if T.annotation(ECS::SingleFrame) %}
-        @used - 1
-      {% else %}
-        @free_items.next_item
-      {% end %}
+      @used - 1
     end
 
     private def release_index(index)
-      {% if T.annotation(ECS::SingleFrame) %}
-        # raise "SingleFrame components can't be deleted directly! #{self.class}"
-        # we just ignore it
-      {% else %}
-        @free_items.release(index)
-        @used -= 1
-      {% end %}
+      unless index == @used - 1
+        @raw[index] = @raw[@used - 1]
+        fix_entity = @corresponding[@used - 1]
+        @sparse[fix_entity] = index
+        @corresponding[index] = fix_entity
+      end
+      @used -= 1
     end
 
     def total_count : Int32
@@ -175,18 +164,11 @@ module ECS
       @size = @size * 2
       @raw = @raw.to_unsafe.realloc(@size).to_slice(@size)
       @corresponding = @corresponding.to_unsafe.realloc(@size).to_slice(@size)
-      (old_size...@size).each do |i|
-        @corresponding[i] = NO_ENTITY
-      end
       {% if T.annotation(ECS::MultipleComponents) %}
         @next_component = @next_component.to_unsafe.realloc(@size).to_slice(@size)
         (old_size...@size).each do |i|
           @next_component[i] = 0
         end
-      {% end %}
-
-      {% if !T.annotation(ECS::SingleFrame) %}
-        @free_items.resize(@size)
       {% end %}
     end
 
@@ -206,7 +188,6 @@ module ECS
       {% else %}
         raise "can't remove component from #{self.class}" unless has_component?(entity)
         item = entity_to_id(entity.id)
-        @corresponding[item] = NO_ENTITY
         {% if T.annotation(ECS::MultipleComponents) %}
           unless all
             next_index = @next_component[item]
@@ -227,7 +208,6 @@ module ECS
       {% if !T.annotation(ECS::SingletonComponent) %}
         return unless has_component?(entity)
         item = entity_to_id entity.id
-        @corresponding[item] = NO_ENTITY
         {% if T.annotation(ECS::MultipleComponents) %}
           unless all
             next_index = @next_component[item]
@@ -245,39 +225,24 @@ module ECS
 
     def each_entity(& : Entity ->)
       {% if !T.annotation(ECS::SingletonComponent) %}
-      first = 0
-      last = @size
-      {% if T.annotation(ECS::SingleFrame) %}
         first = 0
         last = @used
-      {% end %}
-      (first ... last).each do |i|
-        ent = @corresponding[i]
-        next if ent == NO_ENTITY
-        @cache_index = i
-        @cache_entity = ent
-        yield(Entity.new(@world, ent))
-      end
+        (first...last).each do |i|
+          ent = @corresponding[i]
+          @cache_index = i
+          @cache_entity = ent
+          yield(Entity.new(@world, ent))
+        end
       {% end %}
     end
 
     def clear
       {% if T.annotation(ECS::SingletonComponent) %}
         @used = 0
-      {% elsif T.annotation(ECS::SingleFrame) %}
-        @used = 0
-        @sparse.clear
-        @cache_index = -1
       {% else %}
-        if @used >= @size / 4
-          @size.times { |i| @corresponding[i] = NO_ENTITY }
-          @sparse.clear
-          @free_items.clear
-          @used = 0
-          @cache_index = -1
-        else
-          each_entity { |x| remove_component x }
-        end
+        @sparse.clear
+        @used = 0
+        @cache_index = -1
       {% end %}
     end
 
