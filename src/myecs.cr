@@ -57,6 +57,12 @@ module ECS
       add(comp)
     end
 
+    def inspect(io)
+      io << "Entity{" << id << "}["
+      @world.pools.each { |pool| io << pool.name << "," if pool.has_component?(self) && !pool.is_singleton }
+      io << "]"
+    end
+
     def update(comp : Component)
       @world.pool_for(comp).update_component(self, comp)
     end
@@ -130,6 +136,14 @@ module ECS
 
     def name
       T.to_s
+    end
+
+    def is_singleton
+      {% if T.annotation(ECS::SingletonComponent) %}
+        true
+      {% else %}
+        false
+      {% end %}
     end
 
     private def get_free_index : Int32
@@ -375,7 +389,7 @@ module ECS
     end
 
     def inspect(io)
-      io << "{ world, ent_id=" << ent_id << "}"
+      io << "World{max_ent=" << ent_id << "}"
     end
 
     def new_entity
