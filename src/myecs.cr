@@ -40,13 +40,13 @@ module ECS
       @world.base_pool_for(typ).has_component?(self)
     end
 
-    def remove(typ : ComponentType, *, all : Bool = true)
-      @world.base_pool_for(typ).remove_component(self, all: all)
+    def remove(typ : ComponentType)
+      @world.base_pool_for(typ).remove_component(self)
       self
     end
 
-    def remove_if_present(typ : ComponentType, *, all : Bool = true)
-      @world.base_pool_for(typ).try_remove_component(self, all: all)
+    def remove_if_present(typ : ComponentType)
+      @world.base_pool_for(typ).try_remove_component(self)
       self
     end
 
@@ -67,7 +67,7 @@ module ECS
 
     def destroy
       @world.pools.each do |pool|
-        pool.try_remove_component(self, all: true)
+        pool.try_remove_component(self)
       end
     end
 
@@ -105,7 +105,6 @@ module ECS
     @used : Int32 = 0
     @raw : Slice(T)
     @corresponding : Slice(EntityID)
-    @next_component = Slice(Int32).new(0)
     @sparse = Hash(EntityID, Int32).new
     @unsafe_iterating = 0
 
@@ -122,9 +121,6 @@ module ECS
       {% end %}
       @raw = Pointer(T).malloc(@size).to_slice(@size)
       @corresponding = Pointer(EntityID).malloc(@size).to_slice(@size)
-      {% if T.annotation(ECS::MultipleComponents) %}
-        @next_component = Pointer(Int32).malloc(@size).to_slice(@size)
-      {% end %}
     end
 
     def name
@@ -164,12 +160,6 @@ module ECS
       @size = @size * 2
       @raw = @raw.to_unsafe.realloc(@size).to_slice(@size)
       @corresponding = @corresponding.to_unsafe.realloc(@size).to_slice(@size)
-      {% if T.annotation(ECS::MultipleComponents) %}
-        @next_component = @next_component.to_unsafe.realloc(@size).to_slice(@size)
-        (old_size...@size).each do |i|
-          @next_component[i] = 0
-        end
-      {% end %}
     end
 
     def has_component?(entity) : Bool
@@ -181,43 +171,37 @@ module ECS
       {% end %}
     end
 
-    def remove_component(entity, *, all : Bool = true)
+    def remove_component(entity)
       {% if T.annotation(ECS::SingletonComponent) %}
-        raise "can't remove singleton from #{self.class}" if @used == 0
+        raise "can't remove singleton #{self.class}" if @used == 0
         @used = 0
       {% else %}
-        raise "can't remove component from #{self.class}" unless has_component?(entity)
-        item = entity_to_id(entity.id)
-        {% if T.annotation(ECS::MultipleComponents) %}
-          unless all
-            next_index = @next_component[item]
-            if next_index > 0
-              @sparse[entity.id] = next_index-1
-              @cache_index = next_index-1 if entity.id == @cache_entity
-              return
-            end
-          end
-        {% end %}
-        @cache_index = -1 if entity.id == @cache_entity
-        @sparse.delete entity.id
-        release_index item
+        raise "can't remove component #{self.class} from #{entity}" unless has_component?(entity)
+        remove_component_without_check(entity)
       {% end %}
     end
 
-    def try_remove_component(entity, *, all : Bool = true)
-      {% if !T.annotation(ECS::SingletonComponent) %}
+    def try_remove_component(entity)
         return unless has_component?(entity)
-        item = entity_to_id entity.id
-        {% if T.annotation(ECS::MultipleComponents) %}
-          unless all
-            next_index = @next_component[item]
-            if next_index > 0
-              @sparse[entity.id] = next_index-1
-              return
+      remove_component_without_check(entity)
+    end
+
+    def remove_component_without_check(entity)
+      {% if T.annotation(ECS::SingletonComponent) %}
+      {% elsif T.annotation(ECS::MultipleComponents) %}
+        # raise "removing multiple components is not supported"
+        @cache_entity = NO_ENTITY # because many entites are affected
+        @sparse.delete entity.id
+        # we just iterate over all array
+        # TODO - faster method
+        (@used - 1).downto(0) do |i|
+          if @corresponding[i] == entity.id
+            release_index i
             end
           end
-        {% end %}
-        @cache_index = -1 if entity.id == @cache_entity
+      {% else %}
+        item = entity_to_id entity.id
+        @cache_entity = NO_ENTITY # because at least two entites are affected
         @sparse.delete entity.id
         release_index item
       {% end %}
@@ -257,14 +241,6 @@ module ECS
       {% else %}
         fresh = get_free_index
         pointer[fresh] = item.as(Component).as(T)
-
-        {% if T.annotation(ECS::MultipleComponents) %}
-          if @sparse.has_key? entity.id
-            cur_index = @sparse[entity.id]
-            @next_component[fresh] = cur_index+1
-          end
-        {% end %}
-
         @sparse[entity.id] = fresh
         @cache_entity = entity.id
         @cache_index = fresh

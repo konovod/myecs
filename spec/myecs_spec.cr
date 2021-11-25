@@ -522,19 +522,6 @@ describe ECS::MultipleComponents do
     ent.has?(Changer).should be_true
   end
 
-  it "can be added and then removed" do
-    world = ECS::World.new
-    ent = world.new_entity
-    ent.add(Pos.new(0, 0))
-    ent.add(Changer.new(1, 1))
-    ent.add(Changer.new(2, 2))
-    ent.has?(Changer).should be_true
-    ent.remove(Changer, all: false)
-    ent.has?(Changer).should be_true
-    ent.remove(Changer)
-    ent.has?(Changer).should be_false
-  end
-
   it "can be added and then all removed" do
     world = ECS::World.new
     ent = world.new_entity
@@ -542,7 +529,7 @@ describe ECS::MultipleComponents do
     ent.add(Changer.new(1, 1))
     ent.add(Changer.new(2, 2))
     ent.has?(Changer).should be_true
-    ent.remove(Changer, all: true)
+    ent.remove(Changer)
     ent.has?(Changer).should be_false
     expect_raises(Exception) { ent.remove(Changer) }
   end
@@ -555,6 +542,17 @@ describe ECS::MultipleComponents do
     ent.add(Changer.new(2, 2))
     count_entities(world.of(Changer)).should eq 2
     count_entities(world.of(Pos)).should eq 1
+  end
+
+  it "can be iterated after removal" do
+    world = ECS::World.new
+    ent = world.new_entity
+    ent.add(Pos.new(0, 0))
+    ent.add(Changer.new(1, 1))
+    ent.add(Changer.new(2, 2))
+    count_entities(world.of(Changer)).should eq 2
+    ent.remove(Changer)
+    count_entities(world.of(Changer)).should eq 0
   end
 
   it "can be iterated in combination with usual components" do
