@@ -16,8 +16,8 @@ module ECS
   DEFAULT_EVENT_TOTAL_POOL_SIZE =   16
   DEFAULT_ENTITY_POOL_SIZE      = 1024
 
-  alias EntityID = UInt32
-  NO_ENTITY = 0u32
+  alias EntityID = UInt64
+  NO_ENTITY = 0u64
 
   struct Entity
     getter id : EntityID
@@ -182,7 +182,7 @@ module ECS
     end
 
     def try_remove_component(entity)
-        return unless has_component?(entity)
+      return unless has_component?(entity)
       remove_component_without_check(entity)
     end
 
@@ -197,8 +197,8 @@ module ECS
         (@used - 1).downto(0) do |i|
           if @corresponding[i] == entity.id
             release_index i
-            end
           end
+        end
       {% else %}
         item = entity_to_id entity.id
         @cache_entity = NO_ENTITY # because at least two entites are affected
@@ -267,7 +267,7 @@ module ECS
         add_or_update_component(entity, comp)
       {% else %}
         {% if !T.annotation(ECS::MultipleComponents) %}
-          raise "#{T} already added" if has_component?(entity)
+          raise "#{T} already added to #{entity}" if has_component?(entity)
         {% end %}
         add_component_without_check(entity, comp)
       {% end %}
@@ -594,7 +594,11 @@ module ECS
     end
 
     def do_execute
-      execute if @active
+      if @active
+        # puts "#{self.class.name} begin"
+        execute
+        # puts "#{self.class.name} end"
+      end
     end
 
     def teardown

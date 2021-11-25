@@ -207,6 +207,15 @@ describe ECS do
     expect_raises(Exception) { count_entities(world.new_filter.select { |ent| ent.getPos.y > 0 }) }
   end
 
+  it "can found single entity without filter" do
+    world = ECS::World.new
+    world.component_exists?(Pos).should be_false
+    ent = world.new_entity.add(Pos.new(1, 1))
+    world.component_exists?(Pos).should be_true
+    ent.destroy
+    world.component_exists?(Pos).should be_false
+  end
+
   it "can found single entity" do
     world = ECS::World.new
     world.of(Pos).find_entity?.should eq nil
@@ -279,6 +288,12 @@ describe ECS::Systems do
     sys2.teardown_called.should eq 0
     systems.teardown
     sys1.teardown_called.should eq 1
+  end
+
+  it "raises if wasn't initialized" do
+    world = ECS::World.new
+    systems = ECS::Systems.new(world)
+    expect_raises(Exception, "initialized") { systems.execute }
   end
 
   it "can process entities" do
@@ -646,5 +661,31 @@ describe ECS::MultipleComponents do
     ent.getPos.x.should eq 21
     systems.execute
     ent.getPos.x.should eq 32
+  end
+end
+
+describe ECS do
+  it "don't trigger bug with iterating after removal" do
+    world = ECS::World.new
+    systems = ECS::Systems.new(world)
+      .add(ECS::RemoveAllOf(Speed).new(world))
+      .add(ECS::RemoveAllOf(Pos).new(world))
+    systems.init
+
+    ent1 = world.new_entity
+    ent1.add(Pos.new(1, 1))
+    ent1.add(Speed.new(0, 0))
+
+    ent2 = world.new_entity
+    ent2.add(Pos.new(2, 2))
+    ent2.add(Speed.new(0, 0))
+
+    ent3 = world.new_entity
+    ent3.add(Pos.new(3, 3))
+    ent3.add(Speed.new(0, 0))
+    count_entities(world.base_pool_for(Speed)).should eq 3
+    ent1.remove(Pos)
+    ent3.remove(Pos)
+    world.of(Pos).find_entity?.not_nil!.getPos.should eq Pos.new(2, 2)
   end
 end
