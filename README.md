@@ -3,7 +3,7 @@
 ## Main parts of ecs
 
 ### Entity
-Сontainer for components. Consists from UInt32 and pointer to World`:
+Сontainer for components. Consists from UInt64 and pointer to World`:
 ```crystal
 struct Entity
   getter id : EntityID
@@ -124,7 +124,7 @@ systems.init
 world.new_entity.add(SomeRequest.new("First")).add(SomeRequest.new("Second"))
 systems.execute
 ```
-Note above example also shows the use of `@[ECS::MultipleComponents]`. This is for components that can be added multiple times. They have some limitations though - filters can't iterate over several of components with this annotation (as this would usually mean cartesian product, unlikely needed in practice) and there is no way to get multiple components outside of filter (planned).
+Note above example also shows the use of `@[ECS::MultipleComponents]`. This is for components that can be added multiple times. They have some limitations though - filters can't iterate over several of components with this annotation (as this would usually mean cartesian product, unlikely needed in practice), there is no way to get multiple components outside of filter (planned), `delete` deletes all of components on target entity and there is no way to delete only one.
 
 
 annotation `@[ECS::SingletonComponent]` is for data sharing. It creates component that is considered present on every entity (iteration on it isn't possible though). So you can do
@@ -343,9 +343,21 @@ FullFilterAnyOfSystem 216.47M (  4.62ns) (± 2.01%)  0.0B/op          fastest
   SystemComplexFilter  39.19k ( 25.52µs) (± 0.31%)  0.0B/op  5524.39× slower
 ```
 
-## Development
+## Plans
 
-Sadly I can't make `shards` work on Windows, so this is a mirror from a private repository, so there isn't even a history of commits.
+### Short-term
+
+- [ ] Reuse entity identifier, allows to replace `@sparse` hash with array
+- [ ] better API for multiple components - iterating, array
+- [ ] correctly delete multiple components (linked list)
+- [ ] check that all singleframe components are deleted somewhere
+- [ ] benchmark comparison with flecs
+
+### Future
+
+- [ ] Callbacks on adding\deleting components
+- [ ] Work with arena allocator
+
 
 ## Contributors
 
