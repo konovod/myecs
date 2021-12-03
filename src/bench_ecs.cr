@@ -230,10 +230,10 @@ class SystemPassEvents < ECS::Systems
     add SystemGenerateEvent(TestEvent1).new(@world, @world.of(Comp1))
     add SystemGenerateEvent(TestEvent2).new(@world, @world.of(Comp2))
     add SystemGenerateEvent(TestEvent3).new(@world, @world.all_of([TestEvent1, TestEvent2]))
-    add ECS::RemoveAllOf(TestEvent1)
-    add ECS::RemoveAllOf(TestEvent2)
+    remove_singleframe(TestEvent1)
+    remove_singleframe(TestEvent2)
     add CountAllOf(TestEvent3)
-    add ECS::RemoveAllOf(TestEvent3)
+    remove_singleframe(TestEvent3)
   end
 end
 
@@ -272,16 +272,23 @@ def benchmark_creation
   end
 end
 
-def benchmark_list(list)
+macro benchmark_list(*list)
   puts "***********************************************"
   world = init_benchmark_world(BENCH_N)
+  list = [] of ECS::Systems
+  {% for cls in list %}
+    %sys = ECS::Systems.new(world)
+    %sys.add({{cls}})
+    list << %sys
+  {% end %}
+
+
+
   Benchmark.ips(warmup: BENCH_WARMUP, calculation: BENCH_TIME) do |bm|
-    list.each do |cls|
-      sys = ECS::Systems.new(world)
-      sys.add(cls.new(world))
+    list.each do |sys|
       sys.init
       sys.execute
-      bm.report(cls.to_s) do
+      bm.report(sys.children[0].class.name) do
         sys.execute
       end
       # sys.teardown fails due to bm imlementation?
@@ -291,8 +298,7 @@ end
 
 benchmark_creation
 
-benchmark_list [
-  EmptySystem,
+benchmark_list(EmptySystem,
   EmptyFilterSystem,
   SystemAddDeleteSingleComponent,
   SystemAddDeleteFourComponents,
@@ -301,21 +307,19 @@ benchmark_list [
   SystemGetComponent(0),
   SystemGetComponent(1),
   SystemGetSingletonComponent,
-]
+)
 
-benchmark_list [
-  SystemCountComp1,
+benchmark_list(SystemCountComp1,
   SystemUpdateComp1,
   SystemUpdateComp1UsingPtr,
   SystemReplaceComp1,
   SystemPassEvents,
-]
+)
 
-benchmark_list [
-  FullFilterSystem,
+benchmark_list(FullFilterSystem,
   FullFilterAnyOfSystem,
   SystemComplexFilter,
   SystemComplexSelectFilter,
-]
+)
 
 ECS.debug_stats

@@ -136,7 +136,7 @@ require "./src/myecs"
 record SomeRequest < ECS::Component, data : String
 
 class ExecuteSomeRequestsSystem < ECS::System
-  def filter(world) : ECS::Filter?
+  def filter(world)
     world.of(SomeRequest)
   end
 
