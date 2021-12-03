@@ -689,3 +689,5 @@ describe ECS do
     world.of(Pos).find_entity?.not_nil!.getPos.should eq Pos.new(2, 2)
   end
 end
+
+ECS.debug_stats

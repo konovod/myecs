@@ -15,6 +15,8 @@
   * [ECS::Filter](#ECSFilter)
   * [ECS::Systems](#ECSSystems)
 * [Engine integration](#Engine-integration)
+* [Other features](#Other-features)
+  * [Statistics](#Statistics)
 * [Benchmarks](#Benchmarks)
 * [Plans](#Plans)
 * [Contributors](#Contributors)
@@ -312,6 +314,10 @@ end
 ```
 
 see `bench_ecs.cr` for some examples, and `spec` folder for some more. Proper documentation and examples are planned, but not soon.
+
+## Other features
+### Statistics
+You can add `ECS.debug_stats` at he end of program to get information about number of different systems and component classes during compile-time. Userful mostly just for fun :)
 
 ## Benchmarks
 I'm comparing it with https://github.com/spoved/entitas.cr with some "realistic" scenario - creating world with 1_000_000 entities, adding and removing components in it, iterating over components, replacing components with another etc.

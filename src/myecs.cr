@@ -663,4 +663,12 @@ module ECS
       @started = false
     end
   end
+
+  macro debug_stats
+    {% puts "total components: #{Component.all_subclasses.size}" %}
+    {% puts "    single frame: #{Component.all_subclasses.select { |x| x.annotation(SingleFrame) }.size}" %}
+    {% puts "    multiple: #{Component.all_subclasses.select { |x| x.annotation(MultipleComponents) }.size}" %}
+    {% puts "    singleton: #{Component.all_subclasses.select { |x| x.annotation(SingletonComponent) }.size}" %}
+    {% puts "total systems: #{System.all_subclasses.size}" %}
+  end
 end

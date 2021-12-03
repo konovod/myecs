@@ -317,3 +317,5 @@ benchmark_list [
   SystemComplexFilter,
   SystemComplexSelectFilter,
 ]
+
+ECS.debug_stats
