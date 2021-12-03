@@ -1,4 +1,7 @@
-![Github CI](https://github.com/konovod/myecs/actions/workflows/ci.yml/badge.svg)
+<a href="https://github.com/konovod/myecs/actions/workflows/ci.yml">
+      <img src="https://github.com/konovod/myecs/actions/workflows/ci.yml/badge.svg" alt="Build Status">
+</a>
+
 # MyECS
 
 ##### Table of Contents  
