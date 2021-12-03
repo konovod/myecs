@@ -1,6 +1,24 @@
 ![Github CI](https://github.com/konovod/myecs/actions/workflows/ci.yml/badge.svg)
 # MyECS
 
+##### Table of Contents  
+* [Main parts of ecs](#Main-parts-of-ecs)
+  * [Entity](#Entity)
+  * [Component](#Component)
+  * [System](#System)
+* [Special components](#Special-components)
+  * [ECS::SingleFrame](#ECS::SingleFrame)
+  * [ECS::MultipleComponents](#ECS::MultipleComponents)
+  * [ECS::SingletonComponent](#ECS::SingletonComponent)
+* [Other classes](#Other-classes)
+  * [ECS::World](#ECS::World)
+  * [ECS::Filter](#ECS::Filter)
+  * [ECS::Systems](#ECS::Systems)
+* [Engine integration](#Engine-integration)
+* [Benchmarks](#Benchmarks)
+* [Plans](#Plans)
+* [Contributors](#Contributors)
+
 ## Main parts of ecs
 
 ### Entity
@@ -95,7 +113,7 @@ end
 ```
 
 ### Special components
-
+#### ECS::SingleFrame
 annotation `@[ECS::SingleFrame]` is for components that have to live 1 frame (usually - events). The main difference is that they are supposed to be deleted at once, so their storage can be simplified (no need to track free indexes). They should be deleted by adding `ECS::RemoveAllOf(T)` system in a right place of systems list.
 
 ```crystal
@@ -118,16 +136,17 @@ end
 
 world = ECS::World.new
 systems = ECS::Systems.new(world)
-  .add(ExecuteSomeRequestsSystem.new(world))
-  .add(ECS::RemoveAllOf(SomeRequest).new(world))
+  .add(ExecuteSomeRequestsSystem)
+  .add(ECS::RemoveAllOf(SomeRequest))
 systems.init
 # now you can add multiple SomeRequest to the same entity
 world.new_entity.add(SomeRequest.new("First")).add(SomeRequest.new("Second"))
 systems.execute
 ```
+#### ECS::MultipleComponents
 Note above example also shows the use of `@[ECS::MultipleComponents]`. This is for components that can be added multiple times. They have some limitations though - filters can't iterate over several of components with this annotation (as this would usually mean cartesian product, unlikely needed in practice), there is no way to get multiple components outside of filter (planned), `delete` deletes all of components on target entity and there is no way to delete only one.
 
-
+#### ECS::SingletonComponent
 annotation `@[ECS::SingletonComponent]` is for data sharing. It creates component that is considered present on every entity (iteration on it isn't possible though). So you can do
 
 ```crystal
@@ -192,8 +211,8 @@ systems = ECS::Systems.new(world)
 
 systems
   .add(MySystem1.new(world))
-  .add(MySystem2.new(world))
-  .add(MySystem3.new(world))
+  .add(MySystem2) # shortcut for add(MySystem2).new(@world)
+  .add(MySystem3)
 
 systems.init
 loop do
@@ -207,21 +226,20 @@ You can inherit from `ECS::Systems` to add systems automatically:
 class SampleSystem < ECS::Systems
   def initialize(@world)
     super
-    add InitPlayerSystem.new(@world)
+    add InitPlayerSystem
+    # note that shortcut `add KeyReactSystem` isn't applicaple here because 
+    # system require other params in initialize
     add KeyReactSystem.new(@world, pressed: CONFIG_PRESSED, down: CONFIG_DOWN)
-    add ReactPlayerSystem.new(@world)
-    add MovePlayerSystem.new(@world)
-    add RotatePlayerSystem.new(@world)
-    add StopRotatePlayerSystem.new(@world)
-    add SyncPositionWithPhysicsSystem.new(@world)
-    add DrawDebugSystem.new(@world)
+    add ReactPlayerSystem
+    add MovePlayerSystem
+    add RotatePlayerSystem
+    add StopRotatePlayerSystem
+    add SyncPositionWithPhysicsSystem
+    add DrawDebugSystem
   end
 end
 ```
-
-
 ### Engine integration
-
 huh, this is integration with my nonoengine:
 ```crystal
 require "./ecs"
@@ -235,9 +253,9 @@ end
 
 world = ECS::World.new
 systems = ECS::Systems.new(world)
-  .add(BasicSystems.new(world))
-  .add(PhysicSystems.new(world))
-  .add(SampleSystem.new(world))
+  .add(BasicSystems)
+  .add(PhysicSystems)
+  .add(SampleSystem)
 
 systems.init
 quitter = world.of(QuitEvent)
@@ -344,21 +362,14 @@ FullFilterAnyOfSystem 216.47M (  4.62ns) (± 2.01%)  0.0B/op          fastest
 ```
 
 ## Plans
-
 ### Short-term
-
 - [ ] Reuse entity identifier, allows to replace `@sparse` hash with array
 - [ ] better API for multiple components - iterating, array
-- [ ] correctly delete multiple components (linked list)
+- [ ] optimally delete multiple components (linked list)
 - [ ] check that all singleframe components are deleted somewhere
-- [ ] benchmark comparison with flecs
-
+- [ ] benchmark comparison with flecs (https://github.com/jemc/crystal-flecs)
 ### Future
-
 - [ ] Callbacks on adding\deleting components
-- [ ] Work with arena allocator
-
-
+- [ ] Work with arena allocator to drop GC completely
 ## Contributors
-
 - [Andrey Konovod](https://github.com/konovod) - creator and maintainer
