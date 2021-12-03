@@ -627,10 +627,14 @@ module ECS
       @started = false
     end
 
-    def add(sys)
+    def add(sys : System)
       children << sys
       sys.init if @started
       self
+    end
+
+    def add(sys : System.class)
+      add(sys.new(@world))
     end
 
     def init

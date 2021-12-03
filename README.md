@@ -291,31 +291,30 @@ You can see I'm not actually beating it in all areas (I'm much slower in access 
 my ECS:
 ```
 ***********************************************
-              create empty world 220.80k (  4.53µs) (± 7.40%)  20.4kB/op           fastest
-          create benchmark world   5.64  (177.41ms) (± 1.33%)   237MB/op  39173.20× slower
-create and clear benchmark world   5.44  (183.69ms) (± 5.65%)   237MB/op  40558.89× slower
+              create empty world 342.45k (  2.92µs) (± 5.00%)  27.4kB/op           fastest
+          create benchmark world   7.45  (134.14ms) (± 1.23%)   273MB/op  45936.43× slower
+create and clear benchmark world   7.39  (135.35ms) (± 0.75%)   273MB/op  46350.85× slower
 ***********************************************
-                   EmptySystem 114.69M (  8.72ns) (± 3.22%)  0.0B/op        fastest
-             EmptyFilterSystem  21.16M ( 47.26ns) (± 1.69%)  0.0B/op   5.42× slower
-SystemAddDeleteSingleComponent   6.36M (157.19ns) (±18.46%)  0.0B/op  18.03× slower
- SystemAddDeleteFourComponents   1.40M (712.04ns) (± 8.79%)  0.0B/op  81.66× slower
-         SystemAskComponent(0)  50.15M ( 19.94ns) (± 2.64%)  0.0B/op   2.29× slower
-         SystemAskComponent(1)  49.66M ( 20.14ns) (± 2.34%)  0.0B/op   2.31× slower
-         SystemGetComponent(0)  54.97M ( 18.19ns) (± 2.74%)  0.0B/op   2.09× slower
-         SystemGetComponent(1)  35.00M ( 28.57ns) (± 3.61%)  0.0B/op   3.28× slower
-   SystemGetSingletonComponent  87.45M ( 11.43ns) (± 3.68%)  0.0B/op   1.31× slower
+                   EmptySystem 151.33M (  6.61ns) (± 1.54%)  0.0B/op        fastest
+             EmptyFilterSystem  32.62M ( 30.66ns) (± 1.33%)  0.0B/op   4.64× slower
+SystemAddDeleteSingleComponent   8.88M (112.60ns) (±17.89%)  0.0B/op  17.04× slower
+ SystemAddDeleteFourComponents   1.73M (577.71ns) (± 8.06%)  0.0B/op  87.42× slower
+         SystemAskComponent(0)  63.08M ( 15.85ns) (± 2.34%)  0.0B/op   2.40× slower
+         SystemAskComponent(1)  60.03M ( 16.66ns) (± 2.98%)  0.0B/op   2.52× slower
+         SystemGetComponent(0)  63.00M ( 15.87ns) (± 3.07%)  0.0B/op   2.40× slower
+         SystemGetComponent(1)  42.17M ( 23.72ns) (± 1.65%)  0.0B/op   3.59× slower
+   SystemGetSingletonComponent 103.17M (  9.69ns) (± 2.85%)  0.0B/op   1.47× slower
 ***********************************************
-         SystemCountComp1 229.22  (  4.36ms) (± 0.43%)  0.0B/op        fastest
-        SystemUpdateComp1  91.34  ( 10.95ms) (± 0.66%)  0.0B/op   2.51× slower
-SystemUpdateComp1UsingPtr 183.67  (  5.44ms) (± 0.87%)  0.0B/op   1.25× slower
-       SystemReplaceComp1   8.58  (116.60ms) (± 3.35%)  0.0B/op  26.73× slower
-         SystemPassEvents  10.71  ( 93.40ms) (± 1.37%)  0.0B/op  21.41× slower
+         SystemCountComp1 260.93  (  3.83ms) (± 0.31%)  0.0B/op        fastest
+        SystemUpdateComp1  97.02  ( 10.31ms) (± 0.52%)  0.0B/op   2.69× slower
+SystemUpdateComp1UsingPtr 214.56  (  4.66ms) (± 0.24%)  0.0B/op   1.22× slower
+       SystemReplaceComp1   9.55  (104.70ms) (± 2.63%)  0.0B/op  27.32× slower
+         SystemPassEvents  14.27  ( 70.07ms) (± 0.65%)  0.0B/op  18.28× slower
 ***********************************************
-         FullFilterSystem  12.53  ( 79.80ms) (± 1.41%)  0.0B/op   2.21× slower
-    FullFilterAnyOfSystem  12.78  ( 78.24ms) (± 2.18%)  0.0B/op   2.16× slower
-      SystemComplexFilter  27.55  ( 36.30ms) (± 0.90%)  0.0B/op   1.00× slower
-SystemComplexSelectFilter  27.63  ( 36.19ms) (± 4.26%)  0.0B/op        fastest
-***********************************************
+         FullFilterSystem  17.62  ( 56.75ms) (± 1.77%)  0.0B/op   1.93× slower
+    FullFilterAnyOfSystem  15.76  ( 63.45ms) (± 1.08%)  0.0B/op   2.16× slower
+      SystemComplexFilter  33.70  ( 29.67ms) (± 0.56%)  0.0B/op   1.01× slower
+SystemComplexSelectFilter  34.08  ( 29.35ms) (± 0.50%)  0.0B/op        fastest
 ```
 Entitas.cr (it is slightly outdated so you will have problems to make it work)
 ```

@@ -230,10 +230,10 @@ class SystemPassEvents < ECS::Systems
     add SystemGenerateEvent(TestEvent1).new(@world, @world.of(Comp1))
     add SystemGenerateEvent(TestEvent2).new(@world, @world.of(Comp2))
     add SystemGenerateEvent(TestEvent3).new(@world, @world.all_of([TestEvent1, TestEvent2]))
-    add ECS::RemoveAllOf(TestEvent1).new(@world)
-    add ECS::RemoveAllOf(TestEvent2).new(@world)
-    add CountAllOf(TestEvent3).new(@world)
-    add ECS::RemoveAllOf(TestEvent3).new(@world)
+    add ECS::RemoveAllOf(TestEvent1)
+    add ECS::RemoveAllOf(TestEvent2)
+    add CountAllOf(TestEvent3)
+    add ECS::RemoveAllOf(TestEvent3)
   end
 end
 
