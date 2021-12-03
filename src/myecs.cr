@@ -110,6 +110,7 @@ module ECS
 
     @cache_entity : EntityID = NO_ENTITY
     @cache_index : Int32 = -1
+    property deleter_registered = false
 
     def initialize(@world : World)
       @size = DEFAULT_COMPONENT_POOL_SIZE
@@ -269,6 +270,9 @@ module ECS
         {% if !T.annotation(ECS::MultipleComponents) %}
           raise "#{T} already added to #{entity}" if has_component?(entity)
         {% end %}
+        {% if T.annotation(ECS::SingleFrame) && (!T.annotation(ECS::SingleFrame).named_args.keys.includes?("check".id) || T.annotation(ECS::SingleFrame)[:check]) %}
+          raise "#{T} is created but never deleted" unless @deleter_registered
+        {% end %}
         add_component_without_check(entity, comp)
       {% end %}
     end
@@ -281,6 +285,9 @@ module ECS
         if has_component?(entity)
           update_component(entity, comp)
         else
+          {% if T.annotation(ECS::SingleFrame) && (!T.annotation(ECS::SingleFrame).named_args.keys.includes?("check".id) || T.annotation(ECS::SingleFrame)[:check]) %}
+            raise "#{T} is created but never deleted" unless @deleter_registered
+          {% end %}
           add_component_without_check(entity, comp)
         end
       {% end %}
@@ -310,6 +317,10 @@ module ECS
     getter pools = Array(BasePool).new({{Component.all_subclasses.size}})
 
     @@comp_can_be_multiple = Set(ComponentType).new
+
+    def register_singleframe_deleter(typ)
+      base_pool_for(typ).deleter_registered = true
+    end
 
     property cur_systems : Systems? # TODO - TLS
     delegate of, all_of, any_of, exclude, to: new_filter
@@ -612,9 +623,16 @@ module ECS
     end
   end
 
-  class RemoveAllOf(T) < System
+  class RemoveAllOf < System
+    @typ : ComponentType
+
+    def initialize(@world, @typ)
+      super(@world)
+      @world.register_singleframe_deleter(@typ)
+    end
+
     def execute
-      @world.base_pool_for(T).clear
+      @world.base_pool_for(@typ).clear
     end
   end
 
@@ -629,12 +647,19 @@ module ECS
 
     def add(sys : System)
       children << sys
-      sys.init if @started
+      if @started
+        sys.init
+        @filters << sys.filter(@world).as(Filter | Nil)
+      end
       self
     end
 
     def add(sys : System.class)
       add(sys.new(@world))
+    end
+
+    def remove_singleframe(typ)
+      add(ECS::RemoveAllOf.new(@world, typ))
     end
 
     def init

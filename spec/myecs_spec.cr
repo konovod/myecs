@@ -9,9 +9,14 @@ record Speed < ECS::Component, vx : Int32, vy : Int32
 record Name < ECS::Component, name : String
 
 @[ECS::SingleFrame]
-record TestEvent < ECS::Component
-@[ECS::SingleFrame]
+record TestEvent1 < ECS::Component
+@[ECS::SingleFrame(check: true)]
 record TestEvent2 < ECS::Component
+@[ECS::SingleFrame]
+record TestEvent3 < ECS::Component
+
+@[ECS::SingleFrame(check: false)]
+record TestEventNotChecked < ECS::Component
 
 def count_entities(where)
   n = 0
@@ -340,13 +345,6 @@ describe ECS::Systems do
   end
 end
 
-@[ECS::SingleFrame]
-record TestEvent1 < ECS::Component
-@[ECS::SingleFrame]
-record TestEvent2 < ECS::Component
-@[ECS::SingleFrame]
-record TestEvent3 < ECS::Component
-
 class ReplaceEventsSystem(EventFrom, EventTo) < ECS::System
   def filter(world)
     world.of(EventFrom)
@@ -382,18 +380,18 @@ class GenerateEventsInInitSystem(Event) < ECS::System
 end
 
 describe ECS::SingleFrame do
-  it "deleted correctly" do
+  it "is deleted correctly" do
     world = ECS::World.new
     counter_before = CountAllOf(TestEvent3).new(world)
     counter_after = CountAllOf(TestEvent3).new(world)
     systems = ECS::Systems.new(world)
       .add(ReplaceEventsSystem(TestEvent2, TestEvent3).new(world))
-      .add(ECS::RemoveAllOf(TestEvent2).new(world))
+      .remove_singleframe(TestEvent2)
       .add(counter_before)
-      .add(ECS::RemoveAllOf(TestEvent3).new(world))
+      .remove_singleframe(TestEvent3)
       .add(counter_before)
       .add(ReplaceEventsSystem(TestEvent1, TestEvent2).new(world))
-      .add(ECS::RemoveAllOf(TestEvent1).new(world))
+      .remove_singleframe(TestEvent1)
       .add(GenerateEventsSystem(TestEvent1).new(world))
     systems.init
     systems.execute
@@ -405,6 +403,30 @@ describe ECS::SingleFrame do
     systems.execute
     counter_before.value.should eq 1
     counter_after.value.should eq 0
+  end
+
+  it "is checked that they are deleted somewhere" do
+    world = ECS::World.new
+    systems = ECS::Systems.new(world)
+    systems.init
+    expect_raises(Exception) { world.new_entity.add(TestEvent1.new) }
+    systems.remove_singleframe(TestEvent1)
+    world.new_entity.add(TestEvent1.new)
+    count_entities(world.of(TestEvent1)).should eq 1
+    systems.execute
+    count_entities(world.of(TestEvent1)).should eq 0
+  end
+  it "isn't checked that they are deleted somewhere if annotation specify it" do
+    world = ECS::World.new
+    systems = ECS::Systems.new(world)
+    systems.init
+    count_entities(world.of(TestEventNotChecked)).should eq 0
+    world.new_entity.add(TestEventNotChecked.new)
+    count_entities(world.of(TestEventNotChecked)).should eq 1
+    systems.execute
+    count_entities(world.of(TestEventNotChecked)).should eq 1
+    world.new_entity.add(TestEventNotChecked.new)
+    count_entities(world.of(TestEventNotChecked)).should eq 2
   end
 end
 
@@ -470,9 +492,9 @@ describe ECS do
     sys3 = SystemGenerateEvent(TestEvent3).new(world, world.all_of([TestEvent1, TestEvent2]))
     sys4 = CountAllOf(TestEvent3).new(world)
     systems = ECS::Systems.new(world).add(sys1).add(sys2).add(sys3).add(sys4)
-      .add(ECS::RemoveAllOf(TestEvent1).new(world))
-      .add(ECS::RemoveAllOf(TestEvent2).new(world))
-      .add(ECS::RemoveAllOf(TestEvent3).new(world))
+      .remove_singleframe(TestEvent1)
+      .remove_singleframe(TestEvent2)
+      .remove_singleframe(TestEvent3)
     systems.init
     systems.execute
     systems.execute
@@ -631,7 +653,7 @@ describe ECS::MultipleComponents do
     systems = ECS::Systems.new(world)
       .add(GenerateRequests.new(world, [10, 1]))
       .add(ProcessRequests.new(world))
-      .add(ECS::RemoveAllOf(Request).new(world))
+      .remove_singleframe(Request)
     systems.init
     ent = world.new_entity
     ent.add(Pos.new(0, 0))
@@ -650,7 +672,7 @@ describe ECS::MultipleComponents do
     systems = ECS::Systems.new(world)
       .add(GenerateRequests.new(world, [10]))
       .add(ProcessRequests.new(world))
-      .add(ECS::RemoveAllOf(Request).new(world))
+      .remove_singleframe(Request)
       .add(GenerateRequests.new(world, [1]))
     systems.init
     ent = world.new_entity
@@ -668,8 +690,8 @@ describe ECS do
   it "don't trigger bug with iterating after removal" do
     world = ECS::World.new
     systems = ECS::Systems.new(world)
-      .add(ECS::RemoveAllOf(Speed).new(world))
-      .add(ECS::RemoveAllOf(Pos).new(world))
+      .add(ECS::RemoveAllOf.new(world, Speed))
+      .add(ECS::RemoveAllOf.new(world, Pos))
     systems.init
 
     ent1 = world.new_entity

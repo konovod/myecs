@@ -17,6 +17,7 @@
 * [Engine integration](#Engine-integration)
 * [Other features](#Other-features)
   * [Statistics](#Statistics)
+  * [component_exists?](#component_exists)
 * [Benchmarks](#Benchmarks)
 * [Plans](#Plans)
 * [Contributors](#Contributors)
@@ -125,7 +126,7 @@ end
 
 ### Special components
 #### ECS::SingleFrame
-annotation `@[ECS::SingleFrame]` is for components that have to live 1 frame (usually - events). The main difference is that they are supposed to be deleted at once, so their storage can be simplified (no need to track free indexes). They should be deleted by adding `ECS::RemoveAllOf(T)` system in a right place of systems list.
+annotation `@[ECS::SingleFrame]` is for components that have to live 1 frame (usually - events). The main difference is that they are supposed to be deleted at once, so their storage can be simplified (no need to track free indexes). They should be deleted by adding `ECS::RemoveAllOf` system in a right place of systems list (or just using `.remove_singleframe(T)`).
 
 ```crystal
 require "./src/myecs"
@@ -148,14 +149,41 @@ end
 world = ECS::World.new
 systems = ECS::Systems.new(world)
   .add(ExecuteSomeRequestsSystem)
-  .add(ECS::RemoveAllOf(SomeRequest))
+  .remove_singleframe(SomeRequest) # shortcut for `add(ECS::RemoveAllOf.new(@world, SomeRequest))`
 systems.init
 # now you can add SomeRequest to the entity
 world.new_entity.add(SomeRequest.new("First")).add(SomeRequest.new("Second"))
 systems.execute
 ```
+
+In case you tend to forget about removing such single-frame components, ECS checks it for you - if a single-frame component is created, but no corresponding `RemoveAllOf` is present in systems list, runtime exception will be raised
+
+```crystal
+@[ECS::SingleFrame]
+record SomeEvent < ECS::Component
+
+world = ECS::World.new
+systems = ECS::Systems.new(world)
+# ...some systems added
+systems.init
+systens.execute #this won't raise - maybe we don't need SomeEvent at all
+world.new_entity.add(SomeEvent.new) # raises
+```
+
+In a rare cases when you need to override this check, you can use `@[ECS::SingleFrame(check: false)]` form:
+```crystal
+@[ECS::SingleFrame(check: false)]
+record SomeEvent < ECS::Component
+
+world = ECS::World.new
+systems = ECS::Systems.new(world)
+# ...
+world.new_entity.add(SomeEvent.new) # this won't raise
+```
+
 #### ECS::MultipleComponents
 Note above example also shows the use of `@[ECS::MultipleComponents]`. This is for components that can be added multiple times. They have some limitations though - filters can't iterate over several of components with this annotation (as this would usually mean cartesian product, unlikely needed in practice), there is no way to get multiple components outside of filter (it is planned though, but it won't be efficient nor cache-friendly), `delete` deletes all of components on target entity and there is no way to delete only one.
+`ECS::MultipleComponents` can be combined with `ECS::SingleFrame` but that's not a requirement - there are perfectly correct use cases for `ECS::MultipleComponents` on persistent components - add several sprites to one renderable object or add several weapons to a tank. The only thing is that with current API you won't be able to remove single weapon ion that case - only remove all of them. So if you need better control over components just use good old "add an entity with single component and link it to parent entity" approach.
 
 #### ECS::SingletonComponent
 annotation `@[ECS::SingletonComponent]` is for data sharing. It creates component that is considered present on every entity (iteration on it isn't possible though). So you can do
@@ -259,7 +287,7 @@ require "./basic_systems"
 require "./physics_systems"
 require "./demo_systems"
 
-@[ECS::SingleFrame]
+@[ECS::SingleFrame(check: false)]
 struct QuitEvent < ECS::Component
 end
 
@@ -270,11 +298,9 @@ systems = ECS::Systems.new(world)
   .add(SampleSystem)
 
 systems.init
-quitter = world.of(QuitEvent)
 loop do
   systems.execute
-  break if quitter.find_entity?
-  world.clear_single_frame
+  break if world.component_exists? QuitEvent
 end
 systems.teardown
 
@@ -318,6 +344,8 @@ see `bench_ecs.cr` for some examples, and `spec` folder for some more. Proper do
 ## Other features
 ### Statistics
 You can add `ECS.debug_stats` at he end of program to get information about number of different systems and component classes during compile-time. Userful mostly just for fun :)
+### component_exists?
+Sometimes you just need to check if some component is present in a world. No need to create a filter for it - just use `world.component_exists?(SomeComponent)`
 
 ## Benchmarks
 I'm comparing it with https://github.com/spoved/entitas.cr with some "realistic" scenario - creating world with 1_000_000 entities, adding and removing components in it, iterating over components, replacing components with another etc.
@@ -382,7 +410,7 @@ FullFilterAnyOfSystem 216.47M (  4.62ns) (± 2.01%)  0.0B/op          fastest
 - [ ] Reuse entity identifier, allows to replace `@sparse` hash with array
 - [ ] better API for multiple components - iterating, array, deleting onle one
 - [ ] optimally delete multiple components (linked list)
-- [ ] check that all singleframe components are deleted somewhere
+- [X] check that all singleframe components are deleted somewhere
 - [ ] benchmark comparison with flecs (https://github.com/jemc/crystal-flecs)
 ### Future
 - [ ] Callbacks on adding\deleting components
