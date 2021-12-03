@@ -1,3 +1,4 @@
+![Github CI](https://github.com/konovod/myecs/actions/workflows/ci.yml/badge.svg)
 # MyECS
 
 ## Main parts of ecs
