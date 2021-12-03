@@ -639,7 +639,11 @@ module ECS
 
     def init
       raise "#{self.class} already initialized" if @started
-      @children.each &.init
+      @children.each do |child|
+        # puts "#{child.class.name}.init begin"
+        child.init
+        # puts "#{child.class.name}.init end"
+      end
       @filters = @children.map { |x| x.filter(@world).as(Filter | Nil) }
       @started = true
     end
