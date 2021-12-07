@@ -403,6 +403,13 @@ module ECS
       base_pool_for(typ).total_count > 0
     end
 
+    # Iterates over a single component without allocating a filter
+    def each_component(typ, & : Entity ->)
+      base_pool_for(typ).each_entity do |entity|
+        yield(entity)
+      end
+    end
+
     macro finished
       private def init_pools
         {% for obj, index in Component.all_subclasses %} 

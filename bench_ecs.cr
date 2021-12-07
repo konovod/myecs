@@ -34,6 +34,17 @@ class EmptyFilterSystem < ECS::System
   end
 end
 
+class IterateOverCustomFilterSystem < ECS::System
+  @n = 0
+
+  def execute
+    @n = 0
+    @world.each_component(Comp5) do
+      @n += 1
+    end
+  end
+end
+
 class FullFilterSystem < ECS::System
   def filter(world)
     world.exclude([Comp5])
@@ -307,6 +318,7 @@ benchmark_list(EmptySystem,
   SystemGetComponent(0),
   SystemGetComponent(1),
   SystemGetSingletonComponent,
+  IterateOverCustomFilterSystem,
 )
 
 benchmark_list(SystemCountComp1,

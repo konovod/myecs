@@ -347,8 +347,34 @@ see `bench_ecs.cr` for some examples, and `spec` folder for some more. Proper do
 ## Other features
 ### Statistics
 You can add `ECS.debug_stats` at he end of program to get information about number of different systems and component classes during compile-time. Userful mostly just for fun :)
-### component_exists?
+### Iterating without filter
 Sometimes you just need to check if some component is present in a world. No need to create a filter for it - just use `world.component_exists?(SomeComponent)`
+
+You can also iterate over single component without creating Filter using `world.each_component`.
+This could be useful when iterating inside some `System#process`
+```crystal
+class FindNearestTarget < ECS::System
+  def filter(world)
+    world.all_of([Pos, FindTarget])
+  end
+
+  def process(entity)
+    pos = entity.getPos
+    nearest = Nil
+    nearest_range = INFINITY
+    # world.of(IsATarget) will allocate a Filter, so you should create it at initialize and store it
+    # so here is an easier way:
+    world.each_component(IsATarget) do |target|
+      range = distance(target.getPos, pos)
+      if nearest_range > range
+        nearest = target
+        nearest_range = range
+      end
+    end
+    # ...
+  end
+end
+```
 
 ## Benchmarks
 I'm comparing it with https://github.com/spoved/entitas.cr with some "realistic" scenario - creating world with 1_000_000 entities, adding and removing components in it, iterating over components, replacing components with another etc.
