@@ -471,6 +471,16 @@ describe ECS::SingletonComponent do
     count_entities(world).should eq 1
     count_entities(world.of(Config)).should eq 0
   end
+
+  it "can be acquired from a world" do
+    world = ECS::World.new
+    expect_raises(Exception) { world.getConfig }
+    world.getConfig?.should be_nil
+    world.new_entity.add(Config.new(100))
+    world.getConfig?.should be_truthy
+    world.getConfig.value.should eq 100
+    world.getConfig_ptr.value.value.should eq 100
+  end
 end
 
 class SystemGenerateEvent(Event) < ECS::System

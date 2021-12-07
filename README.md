@@ -205,6 +205,9 @@ end
 class SomeAnotherSystem < ECS::System
   def execute
     config = @world.new_entity.getConfig.values # gets the same values
+
+    # another way
+    config = @world.getConfig.values
   end
 end
 ```

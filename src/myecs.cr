@@ -422,6 +422,22 @@ module ECS
         protected def pool_for(component : {{obj}}) : Pool({{obj}})
           @pools[{{index}}].as(Pool({{obj}}))
         end
+
+        {% if obj.annotation(ECS::SingletonComponent) %}
+          {% obj_name = obj.id.split("::").last.id %}
+          def get{{obj_name}}
+          @pools[{{index}}].as(Pool({{obj}})).get_component?(Entity.new(self, NO_ENTITY)) || raise "{{obj}} was not created"
+          end
+      
+          def get{{obj_name}}?
+            @pools[{{index}}].as(Pool({{obj}})).get_component?(Entity.new(self, NO_ENTITY))
+          end
+    
+          def get{{obj_name}}_ptr
+            @pools[{{index}}].as(Pool({{obj}})).get_component_ptr(Entity.new(self, NO_ENTITY))
+          end
+        {% end %}
+    
       {% end %}
 
       protected def base_pool_for(typ : ComponentType)
