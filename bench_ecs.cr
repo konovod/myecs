@@ -125,7 +125,7 @@ class SystemGetSingletonComponent < ECS::System
   @count = 0
 
   def execute
-    conf = @world.new_entity.getConfig
+    conf = @world.getConfig
     @count = conf.values.size
   end
 end
