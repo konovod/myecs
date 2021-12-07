@@ -1,55 +1,73 @@
 module ECS
-  annotation SingleFrame
-  end
-
-  annotation SingletonComponent
-  end
-
+  # Component - container for user data without / with small logic inside.
+  # All components should be inherited from `ECS::Component`
   abstract struct Component
   end
 
+  # Represents component that should exist for one frame and be deleted after.
+  annotation SingleFrame
+  end
+
+  # Represents component that doesn't belong to specific entity. Instead, it can be acquired from every entity.
+  annotation SingletonComponent
+  end
+
+  # Represents component that can be present on any entity more than once.
   annotation MultipleComponents
   end
 
-  DEFAULT_COMPONENT_POOL_SIZE   =   16
-  DEFAULT_EVENT_POOL_SIZE       =   16
-  DEFAULT_EVENT_TOTAL_POOL_SIZE =   16
-  DEFAULT_ENTITY_POOL_SIZE      = 1024
+  private DEFAULT_COMPONENT_POOL_SIZE   =   16
+  private DEFAULT_EVENT_POOL_SIZE       =   16
+  private DEFAULT_EVENT_TOTAL_POOL_SIZE =   16
+  private DEFAULT_ENTITY_POOL_SIZE      = 1024
 
+  # Entity Identifier
   alias EntityID = UInt64
+
+  # Identifier that doesn't match any entity
   NO_ENTITY = 0u64
 
+  # Сontainer for components. Consists from UInt64 and pointer to `World`
   struct Entity
+    # ID of entity
     getter id : EntityID
+    # World that contains entity
     getter world : World
 
     protected def initialize(@world, @id)
     end
 
+    # Adds component to the entity.
+    # Will raise if component already exists (and doesn't have `MultipleComponents` annotation)
     def add(comp : Component)
       @world.pool_for(comp).add_component(self, comp)
       self
     end
 
+    # Adds component to the entity or update existing component of same type
     def set(comp : Component)
       @world.pool_for(comp).add_or_update_component(self, comp)
       self
     end
 
+    # Returns true if component of type `typ` exists on the entity
     def has?(typ : ComponentType)
       @world.base_pool_for(typ).has_component?(self)
     end
 
+    # Removes component of type `typ` from the entity. Will raise if component isn't present on entity
     def remove(typ : ComponentType)
       @world.base_pool_for(typ).remove_component(self)
       self
     end
 
+    # Removes component of type `typ` from the entity if it exists. Otherwise, do nothing
     def remove_if_present(typ : ComponentType)
       @world.base_pool_for(typ).try_remove_component(self)
       self
     end
 
+    # Deletes component of type `typ` and add component `comp` to the entity
     def replace(typ : ComponentType, comp : Component)
       remove(typ)
       add(comp)
@@ -61,10 +79,14 @@ module ECS
       io << "]"
     end
 
+    # Update existing component of same type on the entity. Will raise if component of this type isn't present.
     def update(comp : Component)
       @world.pool_for(comp).update_component(self, comp)
     end
 
+    # Destroys entity removing all components from it.
+    # For now, IDs are not reused, so it is safe to hold entity even when it was destroyed
+    # and add components later
     def destroy
       @world.pools.each do |pool|
         pool.try_remove_component(self)
@@ -89,9 +111,10 @@ module ECS
     end
   end
 
+  # type that represents type of any component
   alias ComponentType = Component.class
 
-  abstract class BasePool
+  private abstract class BasePool
     abstract def has_component?(entity : Entity) : Bool
     abstract def remove_component(entity : Entity)
     abstract def try_remove_component(entity : Entity)
@@ -100,7 +123,7 @@ module ECS
     abstract def total_count : Int32
   end
 
-  class Pool(T) < BasePool
+  private class Pool(T) < BasePool
     @size : Int32
     @used : Int32 = 0
     @raw : Slice(T)
@@ -312,24 +335,28 @@ module ECS
     end
   end
 
+  # Root level container for all entities / components, is iterated with `ECS::Systems`
   class World
     protected getter ent_id = EntityID.new(1)
-    getter pools = Array(BasePool).new({{Component.all_subclasses.size}})
+    protected getter pools = Array(BasePool).new({{Component.all_subclasses.size}})
 
     @@comp_can_be_multiple = Set(ComponentType).new
 
-    def register_singleframe_deleter(typ)
+    protected def register_singleframe_deleter(typ)
       base_pool_for(typ).deleter_registered = true
     end
 
-    property cur_systems : Systems? # TODO - TLS
+    protected property cur_systems : Systems? # TODO - TLS
+
+    # Creates new `Filter` and adds a condition to it
     delegate of, all_of, any_of, exclude, to: new_filter
 
+    # Creates empty world
     def initialize
       init_pools
     end
 
-    def can_be_multiple?(typ : ComponentType)
+    protected def can_be_multiple?(typ : ComponentType)
       @@comp_can_be_multiple.includes? typ
     end
 
@@ -337,20 +364,28 @@ module ECS
       io << "World{max_ent=" << ent_id << "}"
     end
 
+    # Creates new entity in a world context.
+    # Basically doesn't cost anything as it just increase entities counter.
+    # Entity don't take up space without components.
     def new_entity
       Entity.new(self, @ent_id).tap { @ent_id += 1 }
     end
 
+    # Creates new Filter.
+    # This call can be skipped:
+    # Instead of `world.new_filter.of(Comp1)` you can do `world.of(Comp1)`
     def new_filter
       Filter.new(self)
     end
 
+    # Deletes all components and entities from the world
     def delete_all
       @pools.each &.clear
     end
 
     @processed = Set(EntityID).new(DEFAULT_ENTITY_POOL_SIZE)
 
+    # Iterates over all entities
     def each_entity(& : Entity ->)
       return if pools.size == 0
       @pools.each do |pool|
@@ -363,12 +398,13 @@ module ECS
       @processed.clear
     end
 
+    # Returns true if at least one component of type `typ` exists in a world
     def component_exists?(typ)
       base_pool_for(typ).total_count > 0
     end
 
     macro finished
-      def init_pools
+      private def init_pools
         {% for obj, index in Component.all_subclasses %} 
           @pools << Pool({{obj}}).new(self) 
           {% if obj.annotation(ECS::MultipleComponents) %}
@@ -378,12 +414,12 @@ module ECS
       end
 
       {% for obj, index in Component.all_subclasses %} 
-        def pool_for(component : {{obj}}) : Pool({{obj}})
+        protected def pool_for(component : {{obj}}) : Pool({{obj}})
           @pools[{{index}}].as(Pool({{obj}}))
         end
       {% end %}
 
-      def base_pool_for(typ : ComponentType)
+      protected def base_pool_for(typ : ComponentType)
           {% for obj, index in Component.all_subclasses %} 
             return @pools[{{index}}] if typ == {{obj}}
           {% end %}
@@ -393,6 +429,14 @@ module ECS
     end
   end
 
+  # Allows to iterate over entities with specified conditions.
+  # Created by call `world.new_filter` or just by adding any conditions to `world`.
+  # Following conditions are possible:
+  # - entity must have ALL listed components: `filter.all_of([Comp1, Comp2])`, `filter.of(Comp1)`
+  # - entity must have AT LEAST ONE of listed components: `filter.any_of([Comp1, Comp2])`
+  # - entity must have NONE of listed components: `filter.exclude([Comp1, Comp2])`, `filter.exclude(Comp1)`
+  # - specified Proc must return true when called on entity: `filter.select { |ent| ent.getComp1.size > 1 }`
+  # conditions can be specified in any order, multiple conditions of same type are allowed
   class Filter
     @all_of = [] of ComponentType
     @any_of = [] of Array(ComponentType)
@@ -401,9 +445,11 @@ module ECS
     @all_multiple_component : ComponentType?
     @any_multiple_component_index : Int32?
 
-    def initialize(@world : World)
+    protected def initialize(@world : World)
     end
 
+    # Adds a condition that entity must have ALL listed components.
+    # Example: `filter.all_of([Comp1, Comp2])`
     def all_of(list)
       multiple = list.find { |typ| @world.can_be_multiple?(typ) }
       if multiple
@@ -421,16 +467,22 @@ module ECS
       self
     end
 
+    # Adds a condition that entity must not have specified component.
+    # Example: `filter.exclude(Comp1)`
     def exclude(item : ComponentType)
       @exclude << item
       self
     end
 
+    # Adds a condition that entity must have NONE of listed components.
+    # Example: `filter.exclude([Comp1, Comp2])`
     def exclude(list)
       @exclude.concat(list)
       self
     end
 
+    # Adds a condition that entity must have specified component.
+    # Example: `filter.of(Comp1)`
     def of(item : ComponentType)
       if @world.can_be_multiple?(item)
         if old = @all_multiple_component
@@ -445,6 +497,8 @@ module ECS
       self
     end
 
+    # Adds a condition that entity must have AT LEAST ONE of specified components.
+    # Example: `filter.any_of([Comp1, Comp2])`
     def any_of(list)
       if list.size == 1
         return of(list.first)
@@ -471,6 +525,8 @@ module ECS
       self
     end
 
+    # Adds a condition that specified Proc must return true when called on entity.
+    # Example: `filter.select { |ent| ent.getComp1.size > 1 }`
     def select(&block : Entity -> Bool)
       @callbacks << block
       self
@@ -494,6 +550,7 @@ module ECS
       true
     end
 
+    # Returns true if entity satisfy the filter
     def satisfy(entity : Entity)
       return pass_all_of_filter(entity) && pass_any_of_filter(entity) && pass_exclude_and_select_filter(entity)
     end
@@ -506,6 +563,7 @@ module ECS
       false
     end
 
+    # Returns entity that match the filter or `nil` if there are no such entities
     def find_entity?
       each_entity do |ent|
         return ent
@@ -513,7 +571,9 @@ module ECS
       nil
     end
 
-    def count_entities?
+    # Returns number of entities that match the filter.
+    # Note that for `MultipleComponents` single entity can be called multiple times, once for each component present on entity
+    def count_entities
       n = 0
       each_entity do
         n += 1
@@ -545,6 +605,8 @@ module ECS
       end
     end
 
+    # Calls a block once for each entity that match the filter.
+    # Note that for `MultipleComponents` single entity can be called multiple times, once for each component present on entity
     def each_entity(& : Entity ->)
       smallest_all_count = 0
       smallest_any_count = 0
@@ -592,19 +654,26 @@ module ECS
     end
   end
 
+  # Сontainer for logic for processing filtered entities.
+  # User systems should inherit from `ECS::System`
+  # and implement `init`, `execute`, `teardown`, `filter` and `process` (in any combination. Just skip methods you don't need).
   class System
+    # Set `active` property to false to temporarily disable system
     property active = true
 
+    # Constructor. Called before `init`
     def initialize(@world : ECS::World)
     end
 
+    # Will be called once during ECS::Systems.init call
     def init
     end
 
+    # Will be called on each ECS::Systems.execute call
     def execute
     end
 
-    def do_execute
+    protected def do_execute
       if @active
         # puts "#{self.class.name} begin"
         execute
@@ -612,17 +681,30 @@ module ECS
       end
     end
 
+    # Will be called once during ECS::Systems.teardown call
     def teardown
     end
 
+    # Called once during ECS::Systems.init, after #init call.
+    # If this method present, it should return a filter that will be applied to a world
+    # Example:
+    # ```
+    # def filter(world : World)
+    #   world.of(Component1)
+    # end
+    # ```
     def filter(world : World) : Filter?
       nil
     end
 
+    # Called during each ECS::Systems.execute call, before #execute, for each entity that match the #filter
     def process(entity : Entity)
     end
   end
 
+  # This system deletes all components of specified type during execute.
+  # This is a recommended way of deleting `SingleFrame` components.
+  # Example: `systems.add(ECS::RemoveAllOf.new(@world, Component1))`
   class RemoveAllOf < System
     @typ : ComponentType
 
@@ -636,7 +718,12 @@ module ECS
     end
   end
 
+  # Group of systems to process `EcsWorld` instance.
+  # You can add Systems to Systems to create hierarchy.
+  # You can either create Systems directly or (preferred way) inherit from `ECS::Systems` to add systems in `initialize`
   class Systems < System
+    # List of systems in a group. This list shouldn't be modified directly.
+    # Instead, use `#add` to add systems to it and `ECS::System#active` to disable systems
     getter children = [] of System
     @filters = [] of Filter?
     @cur_child : System?
@@ -645,6 +732,7 @@ module ECS
       @started = false
     end
 
+    # Adds system to a group
     def add(sys : System)
       children << sys
       if @started
@@ -654,10 +742,12 @@ module ECS
       self
     end
 
+    # Creates system and adds it to a group
     def add(sys : System.class)
       add(sys.new(@world))
     end
 
+    # Adds `RemoveAllOf` instance for specified copmonent type
     def remove_singleframe(typ)
       add(ECS::RemoveAllOf.new(@world, typ))
     end
@@ -693,6 +783,7 @@ module ECS
     end
   end
 
+  # prints total count of registered components and classes of systems.
   macro debug_stats
     {% puts "total components: #{Component.all_subclasses.size}" %}
     {% puts "    single frame: #{Component.all_subclasses.select { |x| x.annotation(SingleFrame) }.size}" %}

@@ -5,30 +5,30 @@
 # MyECS
 
 ##### Table of Contents  
-* [Main parts of ecs](#Main-parts-of-ecs)
-  * [Entity](#Entity)
-  * [Component](#Component)
-  * [System](#System)
-* [Special components](#Special-components)
-  * [ECS::SingleFrame](#ECSSingleFrame)
-  * [ECS::MultipleComponents](#ECSMultipleComponents)
-  * [ECS::SingletonComponent](#ECSSingletonComponent)
-* [Other classes](#Other-classes)
-  * [ECS::World](#ECSWorld)
-  * [ECS::Filter](#ECSFilter)
-  * [ECS::Systems](#ECSSystems)
-* [Engine integration](#Engine-integration)
-* [Other features](#Other-features)
-  * [Statistics](#Statistics)
+* [Main parts of ecs](#main-parts-of-ecs)
+  * [Entity](#entity)
+  * [Component](#component)
+  * [System](#system)
+* [Special components](#special-components)
+  * [ECS::SingleFrame](#ecssingleframe)
+  * [ECS::MultipleComponents](#ecsmultiplecomponents)
+  * [ECS::SingletonComponent](#ecssingletoncomponent)
+* [Other classes](#other-classes)
+  * [ECS::World](#ecsworld)
+  * [ECS::Filter](#ecsfilter)
+  * [ECS::Systems](#ecssystems)
+* [Engine integration](#engine-integration)
+* [Other features](#other-features)
+  * [Statistics](#statistics)
   * [component_exists?](#component_exists)
-* [Benchmarks](#Benchmarks)
-* [Plans](#Plans)
-* [Contributors](#Contributors)
+* [Benchmarks](#benchmarks)
+* [Plans](#plans)
+* [Contributors](#contributors)
 
 ## Main parts of ecs
 
 ### Entity
-Сontainer for components. Consists from UInt64 and pointer to World`:
+Сontainer for components. Consists from UInt64 and pointer to `World`:
 ```crystal
 struct Entity
   getter id : EntityID

@@ -1,5 +1,5 @@
 require "benchmark"
-require "./myecs"
+require "./src/myecs"
 
 record Comp1 < ECS::Component, x : Int32, y : Int32 do
   def change_x(value)

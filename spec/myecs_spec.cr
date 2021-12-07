@@ -705,7 +705,7 @@ describe ECS do
     ent3 = world.new_entity
     ent3.add(Pos.new(3, 3))
     ent3.add(Speed.new(0, 0))
-    count_entities(world.base_pool_for(Speed)).should eq 3
+    count_entities(world.of(Speed)).should eq 3
     ent1.remove(Pos)
     ent3.remove(Pos)
     world.of(Pos).find_entity?.not_nil!.getPos.should eq Pos.new(2, 2)
