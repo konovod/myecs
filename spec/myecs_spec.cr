@@ -26,14 +26,6 @@ def count_entities(where)
   n
 end
 
-def count_components(world, typ)
-  n = 0
-  world.each_component(typ) do |e|
-    n += 1
-  end
-  n
-end
-
 describe ECS do
   it "adds component" do
     world = ECS::World.new
@@ -231,12 +223,12 @@ describe ECS do
 
   it "can iterate on a single component without filter" do
     world = ECS::World.new
-    count_components(world, Pos).should eq 0
+    count_entities(world.query(Pos)).should eq 0
     ent = world.new_entity.add(Pos.new(1, 1))
     world.new_entity.add(Pos.new(2, 2))
-    count_components(world, Pos).should eq 2
+    count_entities(world.query(Pos)).should eq 2
     ent.destroy
-    count_components(world, Pos).should eq 1
+    count_entities(world.query(Pos)).should eq 1
   end
 
   it "can found single entity" do

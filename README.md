@@ -350,8 +350,8 @@ You can add `ECS.debug_stats` at he end of program to get information about numb
 ### Iterating without filter
 Sometimes you just need to check if some component is present in a world. No need to create a filter for it - just use `world.component_exists?(SomeComponent)`
 
-You can also iterate over single component without creating Filter using `world.each_component`.
-This could be useful when iterating inside some `System#process`
+You can also iterate over single component without creating Filter using `world.query`.
+This could be useful when iterating inside `System#process`:
 ```crystal
 class FindNearestTarget < ECS::System
   def filter(world)
@@ -364,7 +364,7 @@ class FindNearestTarget < ECS::System
     nearest_range = INFINITY
     # world.of(IsATarget) will allocate a Filter, so you should create it at initialize and store it
     # so here is an easier way:
-    world.each_component(IsATarget) do |target|
+    world.query(IsATarget).each_entity do |target|
       range = distance(target.getPos, pos)
       if nearest_range > range
         nearest = target

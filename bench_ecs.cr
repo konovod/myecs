@@ -39,7 +39,7 @@ class IterateOverCustomFilterSystem < ECS::System
 
   def execute
     @n = 0
-    @world.each_component(Comp5) do
+    @world.query(Comp5).each_entity do
       @n += 1
     end
   end

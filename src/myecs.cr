@@ -403,11 +403,9 @@ module ECS
       base_pool_for(typ).total_count > 0
     end
 
-    # Iterates over a single component without allocating a filter
-    def each_component(typ, & : Entity ->)
-      base_pool_for(typ).each_entity do |entity|
-        yield(entity)
-      end
+    # Returns simple (stack-allocated) filter that can iterate over single component
+    def query(typ)
+      SimpleFilter.new(self, typ)
     end
 
     macro finished
@@ -436,6 +434,48 @@ module ECS
     end
   end
 
+  module AbstractFilter
+    # Returns entity that match the filter or `nil` if there are no such entities
+    def find_entity?
+      each_entity do |ent|
+        return ent
+      end
+      nil
+    end
+
+    # Returns number of entities that match the filter.
+    # Note that for `MultipleComponents` single entity can be called multiple times, once for each component present on entity
+    def count_entities
+      n = 0
+      each_entity do
+        n += 1
+      end
+      n
+    end
+  end
+
+  struct SimpleFilter
+    include AbstractFilter
+    @pool : BasePool
+
+    def initialize(@world : World, @typ : ComponentType)
+      @pool = @world.base_pool_for(@typ)
+    end
+
+    def satisfy(entity)
+    end
+
+    def count_entities
+      @pool.total_count
+    end
+
+    def each_entity(& : Entity ->)
+      @pool.each_entity do |entity|
+        yield(entity)
+      end
+    end
+  end
+
   # Allows to iterate over entities with specified conditions.
   # Created by call `world.new_filter` or just by adding any conditions to `world`.
   # Following conditions are possible:
@@ -445,6 +485,7 @@ module ECS
   # - specified Proc must return true when called on entity: `filter.select { |ent| ent.getComp1.size > 1 }`
   # conditions can be specified in any order, multiple conditions of same type are allowed
   class Filter
+    include AbstractFilter
     @all_of = [] of ComponentType
     @any_of = [] of Array(ComponentType)
     @exclude = [] of ComponentType
@@ -568,24 +609,6 @@ module ECS
         return true if entity.has?(typ)
       end
       false
-    end
-
-    # Returns entity that match the filter or `nil` if there are no such entities
-    def find_entity?
-      each_entity do |ent|
-        return ent
-      end
-      nil
-    end
-
-    # Returns number of entities that match the filter.
-    # Note that for `MultipleComponents` single entity can be called multiple times, once for each component present on entity
-    def count_entities
-      n = 0
-      each_entity do
-        n += 1
-      end
-      n
     end
 
     private def iterate_over_type(typ, & : Entity ->)
