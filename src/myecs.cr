@@ -190,7 +190,7 @@ module ECS
       {% if T.annotation(ECS::SingletonComponent) %}
         @used > 0
       {% else %}
-        return @cache_index >= 0 if entity.id == @cache_entity
+        return true if entity.id == @cache_entity
         @sparse.has_key? entity.id
       {% end %}
     end
@@ -225,7 +225,7 @@ module ECS
         end
       {% else %}
         item = entity_to_id entity.id
-        @cache_entity = NO_ENTITY # because at least two entites are affected
+        @cache_entity = NO_ENTITY if @cache_index == item || @cache_index == @used - 1
         @sparse.delete entity.id
         release_index item
       {% end %}
@@ -250,7 +250,7 @@ module ECS
       {% else %}
         @sparse.clear
         @used = 0
-        @cache_index = -1
+        @cache_entity = NO_ENTITY
       {% end %}
     end
 
