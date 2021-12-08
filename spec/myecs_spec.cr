@@ -212,25 +212,6 @@ describe ECS do
     expect_raises(Exception) { count_entities(world.new_filter.select { |ent| ent.getPos.y > 0 }) }
   end
 
-  it "can found single entity without filter" do
-    world = ECS::World.new
-    world.component_exists?(Pos).should be_false
-    ent = world.new_entity.add(Pos.new(1, 1))
-    world.component_exists?(Pos).should be_true
-    ent.destroy
-    world.component_exists?(Pos).should be_false
-  end
-
-  it "can iterate on a single component without filter" do
-    world = ECS::World.new
-    count_entities(world.query(Pos)).should eq 0
-    ent = world.new_entity.add(Pos.new(1, 1))
-    world.new_entity.add(Pos.new(2, 2))
-    count_entities(world.query(Pos)).should eq 2
-    ent.destroy
-    count_entities(world.query(Pos)).should eq 1
-  end
-
   it "can found single entity" do
     world = ECS::World.new
     world.of(Pos).find_entity?.should eq nil
@@ -729,6 +710,36 @@ describe ECS do
     ent1.remove(Pos)
     ent3.remove(Pos)
     world.of(Pos).find_entity?.not_nil!.getPos.should eq Pos.new(2, 2)
+  end
+end
+
+describe ECS::World do
+  it "can found single entity without filter" do
+    world = ECS::World.new
+    world.component_exists?(Pos).should be_false
+    ent = world.new_entity.add(Pos.new(1, 1))
+    world.component_exists?(Pos).should be_true
+    ent.destroy
+    world.component_exists?(Pos).should be_false
+  end
+
+  it "can iterate on a single component without filter" do
+    world = ECS::World.new
+    count_entities(world.query(Pos)).should eq 0
+    ent = world.new_entity.add(Pos.new(1, 1))
+    world.new_entity.add(Pos.new(2, 2))
+    count_entities(world.query(Pos)).should eq 2
+    ent.destroy
+    count_entities(world.query(Pos)).should eq 1
+  end
+
+  it "can show stats" do
+    world = ECS::World.new
+    world.stats.should eq Hash(String, Int32).new
+    ent = world.new_entity.add(Pos.new(1, 1))
+    ent.add(Speed.new(2, 2))
+    ent = world.new_entity.add(Pos.new(1, 1))
+    world.stats.should eq({"Speed" => 1, "Pos" => 2})
   end
 end
 

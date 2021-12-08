@@ -307,6 +307,8 @@ macro benchmark_list(*list)
   end
 end
 
+puts init_benchmark_world(BENCH_N).stats
+
 benchmark_creation
 
 benchmark_list(EmptySystem,

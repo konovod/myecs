@@ -447,10 +447,39 @@ module ECS
             raise "unregistered component type: #{typ}"
       end
 
+      # Non-allocating version of `stats`. Yields pairs of component name and count of corresponding components
+      # ```
+      # world = init_benchmark_world(1000000)
+      # world.stats do |comp_name, value| 
+      #   puts "#{comp_name}: #{value}" 
+      # end
+      # ```
+      def stats(&: String, Int32 ->)
+        @pools.each do |pool|
+          next if pool.total_count == 0
+          yield(pool.name, pool.total_count)
+        end
+      end
+
+      # Returns Hash containing count of components
+      # ```
+      # world = init_benchmark_world(1000000)
+      # puts world.stats # prints {"Comp1" => 500000, "Comp2" => 333334, "Comp3" => 200000, "Comp4" => 142858, "Config" => 1}
+      # ```
+      def stats
+        result = {} of String => Int32
+        stats do |name, count|
+          result[name] = count
+        end
+        result
+      end
     end
   end
 
   module AbstractFilter
+    abstract def satisfy(entity : Entity) : Bool
+    abstract def each_entity(& : Entity ->)
+
     # Returns entity that match the filter or `nil` if there are no such entities
     def find_entity?
       each_entity do |ent|
@@ -478,7 +507,8 @@ module ECS
       @pool = @world.base_pool_for(@typ)
     end
 
-    def satisfy(entity)
+    def satisfy(entity : Entity) : Bool
+      entity.has? @typ
     end
 
     def count_entities
@@ -615,7 +645,7 @@ module ECS
     end
 
     # Returns true if entity satisfy the filter
-    def satisfy(entity : Entity)
+    def satisfy(entity : Entity) : Bool
       return pass_all_of_filter(entity) && pass_any_of_filter(entity) && pass_exclude_and_select_filter(entity)
     end
 

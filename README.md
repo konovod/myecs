@@ -350,6 +350,22 @@ see `bench_ecs.cr` for some examples, and `spec` folder for some more. Proper do
 ## Other features
 ### Statistics
 You can add `ECS.debug_stats` at he end of program to get information about number of different systems and component classes during compile-time. Userful mostly just for fun :)
+
+you can get runtime statistics (how many components of each type is present) using `ECS::World#stats`. It returns with component name as a key and components count as value.
+There is also non-allocating version of `stats` that yields an info instead of creating a hash:
+```crystal
+world = init_benchmark_world(1000000)
+
+puts world.stats 
+# {"Comp1" => 500000, "Comp2" => 333334, "Comp3" => 200000, "Comp4" => 142858, "Config" => 1}
+
+# will print the same info
+world.stats do |comp_name, value| 
+  puts "#{comp_name}: #{value}" 
+end
+```
+
+
 ### Iterating without filter
 Sometimes you just need to check if some component is present in a world. No need to create a filter for it - just use `world.component_exists?(SomeComponent)`
 
