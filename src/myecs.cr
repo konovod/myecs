@@ -25,7 +25,7 @@ module ECS
   alias EntityID = UInt32
 
   # Identifier that doesn't match any entity
-  NO_ENTITY = 0u32
+  NO_ENTITY = 0xFFFFFFFFu32
 
   # Сontainer for components. Consists from UInt64 and pointer to `World`
   struct Entity
@@ -56,7 +56,7 @@ module ECS
     end
 
     # Removes component of type `typ` from the entity. Will raise if component isn't present on entity
-    def remove(typ : ComponentType)
+    def remove(typ : ComponentType, *, dont_gc = false)
       @world.base_pool_for(typ).remove_component(self)
       self
     end
@@ -69,8 +69,8 @@ module ECS
 
     # Deletes component of type `typ` and add component `comp` to the entity
     def replace(typ : ComponentType, comp : Component)
+      remove(typ, dont_gc: true)
       add(comp)
-      remove(typ)
     end
 
     def inspect(io)
@@ -89,8 +89,9 @@ module ECS
     # and add components later
     def destroy
       @world.pools.each do |pool|
-        pool.try_remove_component(self)
+        pool.try_remove_component(self, dont_gc: true)
       end
+      @world.gc_entity self
     end
 
     macro finished
@@ -143,7 +144,7 @@ module ECS
       {% if T.annotation(ECS::SingletonComponent) %}
         @size = 1
       {% end %}
-      @sparse = Pointer(Int32).malloc(@world.entities_count + 1).to_slice(@world.entities_count + 1)
+      @sparse = Pointer(Int32).malloc(@world.entities_count).to_slice(@world.entities_count)
       @sparse.fill(-1)
       @raw = Pointer(T).malloc(@size).to_slice(@size)
       @corresponding = Pointer(EntityID).malloc(@size).to_slice(@size)
@@ -151,8 +152,8 @@ module ECS
 
     protected def resize_sparse(count)
       old = @sparse.size
-      @sparse = @sparse.to_unsafe.realloc(count + 1).to_slice(count + 1)
-      (old..count).each do |i|
+      @sparse = @sparse.to_unsafe.realloc(count).to_slice(count)
+      (old...count).each do |i|
         @sparse[i] = -1
       end
     end
@@ -205,22 +206,22 @@ module ECS
       {% end %}
     end
 
-    def remove_component(entity)
+    def remove_component(entity, *, dont_gc = false)
       {% if T.annotation(ECS::SingletonComponent) %}
         raise "can't remove singleton #{self.class}" if @used == 0
         @used = 0
       {% else %}
         raise "can't remove component #{self.class} from #{entity}" unless has_component?(entity)
-        remove_component_without_check(entity)
+        remove_component_without_check(entity, dont_gc: dont_gc)
       {% end %}
     end
 
-    def try_remove_component(entity)
+    def try_remove_component(entity, *, dont_gc = false)
       return unless has_component?(entity)
-      remove_component_without_check(entity)
+      remove_component_without_check(entity, dont_gc: dont_gc)
     end
 
-    def remove_component_without_check(entity)
+    def remove_component_without_check(entity, *, dont_gc = false)
       {% if T.annotation(ECS::SingletonComponent) %}
       {% elsif T.annotation(ECS::MultipleComponents) %}
         # raise "removing multiple components is not supported"
@@ -233,13 +234,13 @@ module ECS
             release_index i
           end
         end
-        @world.check_gc_entity entity
+        @world.check_gc_entity(entity) unless dont_gc
       {% else %}
         item = entity_to_id entity.id
         @cache_entity = NO_ENTITY if @cache_index == item || @cache_index == @used - 1
         @sparse[entity.id] = -1
         release_index item
-        @world.check_gc_entity entity
+        @world.check_gc_entity(entity) unless dont_gc
       {% end %}
     end
 
@@ -388,7 +389,7 @@ module ECS
         @free_entities.resize(@free_entities.count*2)
         @pools.each &.resize_sparse(@free_entities.count)
       end
-      Entity.new(self, EntityID.new(@free_entities.next_item + 1))
+      Entity.new(self, EntityID.new(@free_entities.next_item))
     end
 
     # Creates new Filter.
@@ -433,7 +434,11 @@ module ECS
       @pools.each do |pool|
         return if pool.has_component? entity
       end
-      @free_entities.release(Int32.new(entity.id - 1))
+      @free_entities.release(Int32.new(entity.id))
+    end
+
+    protected def gc_entity(entity)
+      @free_entities.release(Int32.new(entity.id))
     end
 
     macro finished
@@ -898,7 +903,7 @@ module ECS
 end
 
 class LinkedList
-  @array : Array(Int32)
+  @array : Slice(Int32)
   @root = 0
   getter remaining = 0
   getter count = 0
@@ -906,7 +911,7 @@ class LinkedList
   def initialize(@count : Int32)
     @remaining = @count
     # initialize with each element pointing to next
-    @array = Array(Int32).new(@count) { |i| i + 1 }
+    @array = Slice(Int32).new(@count) { |i| i + 1 }
   end
 
   def next_item
@@ -925,8 +930,9 @@ class LinkedList
 
   def resize(new_size)
     raise "shrinking list isn't supported" if new_size < @count
-    (new_size - @count).times do |i|
-      @array << i + @count + 1
+    @array = @array.to_unsafe.realloc(new_size).to_slice(new_size)
+    (@count...new_size).each do |i|
+      @array[i] = i + 1
     end
     @remaining += new_size - @count
     @count = new_size
