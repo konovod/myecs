@@ -85,8 +85,7 @@ module ECS
     end
 
     # Destroys entity removing all components from it.
-    # For now, IDs are not reused, so it is safe to hold entity even when it was destroyed
-    # and add components later
+    # Entity ID is marked as free and can be reused
     def destroy
       @world.pools.each do |pool|
         pool.try_remove_component(@id, dont_gc: true)

@@ -38,13 +38,11 @@ struct Entity
 
 ```crystal
 # Creates new entity in world context. 
-# Basically doesn't cost anything as it just increase entity counter.
-# Entity don't take up space without components.
+# Basically just allocates a new identifier so it's fast.
 entity = world.new_entity
 
-# destroying entity just removes all components from it. 
-# For now IDs are not reused, so it is safe to hold entity even when it was destroyed 
-# and add components later
+# destroying entity marks entity id as free so it can be reused. It is also destroyed when last component removed from it.
+# If you need to hold an empty entity, suggested way is to add some component to it.
 entity.destroy
 ```
 
@@ -457,6 +455,7 @@ FullFilterAnyOfSystem 216.47M (  4.62ns) (± 2.01%)  0.0B/op          fastest
 ## Plans
 ### Short-term
 - [x] Reuse entity identifier, allows to replace `@sparse` hash with array
+- [ ] generations of EntityID to catch usage of deleted entities
 - [ ] better API for multiple components - iterating, array, deleting onle one
 - [ ] optimally delete multiple components (linked list)
 - [X] check that all singleframe components are deleted somewhere
