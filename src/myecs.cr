@@ -69,8 +69,8 @@ module ECS
 
     # Deletes component of type `typ` and add component `comp` to the entity
     def replace(typ : ComponentType, comp : Component)
-      remove(typ)
       add(comp)
+      remove(typ)
     end
 
     def inspect(io)
@@ -223,11 +223,13 @@ module ECS
             release_index i
           end
         end
+        @world.check_gc_entity entity
       {% else %}
         item = entity_to_id entity.id
         @cache_entity = NO_ENTITY if @cache_index == item || @cache_index == @used - 1
         @sparse.delete entity.id
         release_index item
+        @world.check_gc_entity entity
       {% end %}
     end
 
@@ -337,7 +339,7 @@ module ECS
 
   # Root level container for all entities / components, is iterated with `ECS::Systems`
   class World
-    protected getter ent_id = EntityID.new(1)
+    @free_entities = LinkedList.new(DEFAULT_ENTITY_POOL_SIZE)
     protected getter pools = Array(BasePool).new({{Component.all_subclasses.size}})
 
     @@comp_can_be_multiple = Set(ComponentType).new
@@ -361,14 +363,17 @@ module ECS
     end
 
     def inspect(io)
-      io << "World{max_ent=" << ent_id << "}"
+      io << "World{max_ent=" << @free_entities.count << "}"
     end
 
     # Creates new entity in a world context.
     # Basically doesn't cost anything as it just increase entities counter.
     # Entity don't take up space without components.
     def new_entity
-      Entity.new(self, @ent_id).tap { @ent_id += 1 }
+      if @free_entities.remaining <= 0
+        @free_entities.resize(@free_entities.@count*2)
+      end
+      Entity.new(self, EntityID.new(@free_entities.next_item + 1))
     end
 
     # Creates new Filter.
@@ -380,6 +385,7 @@ module ECS
 
     # Deletes all components and entities from the world
     def delete_all
+      @free_entities.clear
       @pools.each &.clear
     end
 
@@ -408,6 +414,13 @@ module ECS
       SimpleFilter.new(self, typ)
     end
 
+    protected def check_gc_entity(entity)
+      @pools.each do |pool|
+        return if pool.has_component? entity
+      end
+      @free_entities.release(Int32.new(entity.id - 1))
+    end
+
     macro finished
       private def init_pools
         {% for obj, index in Component.all_subclasses %} 
@@ -419,7 +432,7 @@ module ECS
       end
 
       {% for obj, index in Component.all_subclasses %} 
-        protected def pool_for(component : {{obj}}) : Pool({{obj}})
+        def pool_for(component : {{obj}}) : Pool({{obj}})
           @pools[{{index}}].as(Pool({{obj}}))
         end
 
@@ -866,5 +879,48 @@ module ECS
     {% puts "    multiple: #{Component.all_subclasses.select { |x| x.annotation(MultipleComponents) }.size}" %}
     {% puts "    singleton: #{Component.all_subclasses.select { |x| x.annotation(SingletonComponent) }.size}" %}
     {% puts "total systems: #{System.all_subclasses.size}" %}
+  end
+end
+
+class LinkedList
+  @array : Array(Int32)
+  @root = 0
+  getter remaining = 0
+
+  def initialize(@count : Int32)
+    @remaining = @count
+    # initialize with each element pointing to next
+    @array = Array(Int32).new(@count) { |i| i + 1 }
+  end
+
+  def next_item
+    result = @root
+    raise "linked list empty" if result >= @count
+    @root = @array[@root]
+    @remaining -= 1
+    result
+  end
+
+  def release(item : Int32)
+    @array[item] = @root
+    @remaining += 1
+    @root = item
+  end
+
+  def resize(new_size)
+    raise "shrinking list isn't supported" if new_size < @count
+    (new_size - @count).times do |i|
+      @array << i + @count + 1
+    end
+    @remaining += new_size - @count
+    @count = new_size
+  end
+
+  def clear
+    @remaining = @count
+    @count.times do |i|
+      @array[i] = i + 1
+    end
+    @root = 0
   end
 end
