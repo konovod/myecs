@@ -144,7 +144,7 @@ module ECS
       {% if T.annotation(ECS::SingletonComponent) %}
         @size = 1
       {% end %}
-      @sparse = Pointer(Int32).malloc(@world.entities_count).to_slice(@world.entities_count)
+      @sparse = Pointer(Int32).malloc(@world.entities_capacity).to_slice(@world.entities_capacity)
       @sparse.fill(-1)
       @raw = Pointer(T).malloc(@size).to_slice(@size)
       @corresponding = Pointer(EntityID).malloc(@size).to_slice(@size)
@@ -378,6 +378,10 @@ module ECS
     end
 
     def entities_count
+      @free_entities.count - @free_entities.remaining
+    end
+
+    def entities_capacity
       @free_entities.count
     end
 
@@ -430,9 +434,9 @@ module ECS
       SimpleFilter.new(self, typ)
     end
 
-    protected def check_gc_entity(entity)
+    def check_gc_entity(entity)
       @pools.each do |pool|
-        return if pool.has_component? entity
+        return if !pool.is_singleton && pool.has_component? entity
       end
       @free_entities.release(Int32.new(entity.id))
     end
