@@ -260,7 +260,7 @@ def init_benchmark_world(n)
     ent.add(Comp2.new(i.to_s)) if i % 3 == 0
     ent.add(Comp3.new(StaticArray(Int32, 64).new { |x| x + i })) if i % 5 == 0
     ent.add(Comp4.new) if i % 7 == 0
-    world.check_gc_entity(ent)
+    ent.destroy_if_empty
   end
   return world
 end

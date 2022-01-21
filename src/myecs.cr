@@ -40,48 +40,48 @@ module ECS
     # Adds component to the entity.
     # Will raise if component already exists (and doesn't have `MultipleComponents` annotation)
     def add(comp : Component)
-      @world.pool_for(comp).add_component(self, comp)
+      @world.pool_for(comp).add_component(@id, comp)
       self
     end
 
     # Adds component to the entity or update existing component of same type
     def set(comp : Component)
-      @world.pool_for(comp).add_or_update_component(self, comp)
+      @world.pool_for(comp).add_or_update_component(@id, comp)
       self
     end
 
     # Returns true if component of type `typ` exists on the entity
     def has?(typ : ComponentType)
-      @world.base_pool_for(typ).has_component?(self)
+      @world.base_pool_for(typ).has_component?(@id)
     end
 
     # Removes component of type `typ` from the entity. Will raise if component isn't present on entity
-    def remove(typ : ComponentType, *, dont_gc = false)
-      @world.base_pool_for(typ).remove_component(self)
+    def remove(typ : ComponentType)
+      @world.base_pool_for(typ).remove_component(@id)
       self
     end
 
     # Removes component of type `typ` from the entity if it exists. Otherwise, do nothing
     def remove_if_present(typ : ComponentType)
-      @world.base_pool_for(typ).try_remove_component(self)
+      @world.base_pool_for(typ).try_remove_component(@id)
       self
     end
 
     # Deletes component of type `typ` and add component `comp` to the entity
     def replace(typ : ComponentType, comp : Component)
-      remove(typ, dont_gc: true)
+      @world.base_pool_for(typ).remove_component(@id, dont_gc: true)
       add(comp)
     end
 
     def inspect(io)
       io << "Entity{" << id << "}["
-      @world.pools.each { |pool| io << pool.name << "," if pool.has_component?(self) && !pool.is_singleton }
+      @world.pools.each { |pool| io << pool.name << "," if pool.has_component?(@id) && !pool.is_singleton }
       io << "]"
     end
 
     # Update existing component of same type on the entity. Will raise if component of this type isn't present.
     def update(comp : Component)
-      @world.pool_for(comp).update_component(self, comp)
+      @world.pool_for(comp).update_component(@id, comp)
     end
 
     # Destroys entity removing all components from it.
@@ -89,24 +89,28 @@ module ECS
     # and add components later
     def destroy
       @world.pools.each do |pool|
-        pool.try_remove_component(self, dont_gc: true)
+        pool.try_remove_component(@id, dont_gc: true)
       end
-      @world.gc_entity self
+      @world.gc_entity @id
+    end
+
+    def destroy_if_empty
+      @world.check_gc_entity @id
     end
 
     macro finished
       {% for obj, index in Component.all_subclasses %} 
       {% obj_name = obj.id.split("::").last.id %}
       def get{{obj_name}}
-      @world.pools[{{index}}].as(Pool({{obj}})).get_component?(self) || raise "{{obj}} not present on entity #{self}"
+      @world.pools[{{index}}].as(Pool({{obj}})).get_component?(@id) || raise "{{obj}} not present on entity #{self}"
       end
   
       def get{{obj_name}}?
-        @world.pools[{{index}}].as(Pool({{obj}})).get_component?(self)
+        @world.pools[{{index}}].as(Pool({{obj}})).get_component?(@id)
       end
 
       def get{{obj_name}}_ptr
-        @world.pools[{{index}}].as(Pool({{obj}})).get_component_ptr(self)
+        @world.pools[{{index}}].as(Pool({{obj}})).get_component_ptr(@id)
       end
       {% end %}
     end
@@ -116,10 +120,10 @@ module ECS
   alias ComponentType = Component.class
 
   private abstract class BasePool
-    abstract def has_component?(entity : Entity) : Bool
-    abstract def remove_component(entity : Entity)
-    abstract def try_remove_component(entity : Entity)
-    abstract def each_entity(& : Entity ->)
+    abstract def has_component?(entity : EntityID) : Bool
+    abstract def remove_component(entity : EntityID)
+    abstract def try_remove_component(entity : EntityID)
+    abstract def each_entity(& : EntityID ->)
     abstract def clear
     abstract def total_count : Int32
   end
@@ -201,8 +205,8 @@ module ECS
       {% if T.annotation(ECS::SingletonComponent) %}
         @used > 0
       {% else %}
-        return true if entity.id == @cache_entity
-        @sparse[entity.id] >= 0
+        return true if entity == @cache_entity
+        @sparse[entity] >= 0
       {% end %}
     end
 
@@ -226,25 +230,25 @@ module ECS
       {% elsif T.annotation(ECS::MultipleComponents) %}
         # raise "removing multiple components is not supported"
         @cache_entity = NO_ENTITY # because many entites are affected
-        @sparse[entity.id] = -1
+        @sparse[entity] = -1
         # we just iterate over all array
         # TODO - faster method
         (@used - 1).downto(0) do |i|
-          if @corresponding[i] == entity.id
+          if @corresponding[i] == entity
             release_index i
           end
         end
         @world.check_gc_entity(entity) unless dont_gc
       {% else %}
-        item = entity_to_id entity.id
+        item = entity_to_id entity
         @cache_entity = NO_ENTITY if @cache_index == item || @cache_index == @used - 1
-        @sparse[entity.id] = -1
+        @sparse[entity] = -1
         release_index item
         @world.check_gc_entity(entity) unless dont_gc
       {% end %}
     end
 
-    def each_entity(& : Entity ->)
+    def each_entity(& : EntityID ->)
       {% if !T.annotation(ECS::SingletonComponent) %}
         first = 0
         last = @used
@@ -252,7 +256,7 @@ module ECS
           ent = @corresponding[i]
           @cache_index = i
           @cache_entity = ent
-          yield(Entity.new(@world, ent))
+          yield(ent)
         end
       {% end %}
     end
@@ -271,17 +275,17 @@ module ECS
       @raw
     end
 
-    def add_component_without_check(entity : Entity, item)
+    def add_component_without_check(entity : EntityID, item)
       {% if T.annotation(ECS::SingletonComponent) %}
         pointer[0] = item.as(Component).as(T)
         @used = 1
       {% else %}
         fresh = get_free_index
         pointer[fresh] = item.as(Component).as(T)
-        @sparse[entity.id] = fresh
-        @cache_entity = entity.id
+        @sparse[entity] = fresh
+        @cache_entity = entity
         @cache_index = fresh
-        @corresponding[fresh] = entity.id
+        @corresponding[fresh] = entity
       {% end %}
     end
 
@@ -295,7 +299,7 @@ module ECS
         @used = 1
         pointer[0] = comp.as(Component).as(T)
       {% else %}
-        pointer[entity_to_id(entity.id)] = comp.as(Component).as(T)
+        pointer[entity_to_id(entity)] = comp.as(Component).as(T)
       {% end %}
     end
 
@@ -333,7 +337,7 @@ module ECS
       {% if T.annotation(ECS::SingletonComponent) %}
         pointer.to_unsafe
       {% else %}
-        (pointer + entity_to_id entity.id).to_unsafe
+        (pointer + entity_to_id entity).to_unsafe
       {% end %}
     end
 
@@ -343,7 +347,7 @@ module ECS
         pointer[0]
       {% else %}
         return nil unless has_component?(entity)
-        pointer[entity_to_id entity.id]
+        pointer[entity_to_id entity]
       {% end %}
     end
   end
@@ -416,9 +420,9 @@ module ECS
       return if pools.size == 0
       @pools.each do |pool|
         pool.each_entity do |ent|
-          next if @processed.includes? ent.id
-          yield(ent)
-          @processed.add(ent.id)
+          next if @processed.includes? ent
+          yield(Entity.new(self, ent))
+          @processed.add(ent)
         end
       end
       @processed.clear
@@ -434,15 +438,15 @@ module ECS
       SimpleFilter.new(self, typ)
     end
 
-    def check_gc_entity(entity)
+    protected def check_gc_entity(entity)
       @pools.each do |pool|
         return if !pool.is_singleton && pool.has_component? entity
       end
-      @free_entities.release(Int32.new(entity.id))
+      @free_entities.release(Int32.new(entity))
     end
 
     protected def gc_entity(entity)
-      @free_entities.release(Int32.new(entity.id))
+      @free_entities.release(Int32.new(entity))
     end
 
     macro finished
@@ -554,7 +558,7 @@ module ECS
 
     def each_entity(& : Entity ->)
       @pool.each_entity do |entity|
-        yield(entity)
+        yield(Entity.new(@world, entity))
       end
     end
   end
@@ -695,7 +699,8 @@ module ECS
     end
 
     private def iterate_over_type(typ, & : Entity ->)
-      @world.base_pool_for(typ).each_entity do |entity|
+      @world.base_pool_for(typ).each_entity do |id|
+        entity = Entity.new(@world, id)
         next unless satisfy(entity)
         yield(entity)
       end
@@ -703,7 +708,8 @@ module ECS
 
     private def iterate_over_list(list, & : Entity ->)
       list.each_with_index do |typ, index|
-        @world.base_pool_for(typ).each_entity do |entity|
+        @world.base_pool_for(typ).each_entity do |id|
+          entity = Entity.new(@world, id)
           next if already_processed_in_list(entity, list, index)
           next unless satisfy(entity)
           yield(entity)
