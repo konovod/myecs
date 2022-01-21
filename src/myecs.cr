@@ -22,10 +22,10 @@ module ECS
   private DEFAULT_ENTITY_POOL_SIZE      = 1024
 
   # Entity Identifier
-  alias EntityID = UInt64
+  alias EntityID = UInt32
 
   # Identifier that doesn't match any entity
-  NO_ENTITY = 0u64
+  NO_ENTITY = 0u32
 
   # Сontainer for components. Consists from UInt64 and pointer to `World`
   struct Entity
@@ -128,7 +128,7 @@ module ECS
     @used : Int32 = 0
     @raw : Slice(T)
     @corresponding : Slice(EntityID)
-    @sparse = Hash(EntityID, Int32).new
+    @sparse : Slice(Int32)
     @unsafe_iterating = 0
 
     @cache_entity : EntityID = NO_ENTITY
@@ -143,8 +143,18 @@ module ECS
       {% if T.annotation(ECS::SingletonComponent) %}
         @size = 1
       {% end %}
+      @sparse = Pointer(Int32).malloc(@world.entities_count + 1).to_slice(@world.entities_count + 1)
+      @sparse.fill(-1)
       @raw = Pointer(T).malloc(@size).to_slice(@size)
       @corresponding = Pointer(EntityID).malloc(@size).to_slice(@size)
+    end
+
+    protected def resize_sparse(count)
+      old = @sparse.size
+      @sparse = @sparse.to_unsafe.realloc(count + 1).to_slice(count + 1)
+      (old..count).each do |i|
+        @sparse[i] = -1
+      end
     end
 
     def name
@@ -191,7 +201,7 @@ module ECS
         @used > 0
       {% else %}
         return true if entity.id == @cache_entity
-        @sparse.has_key? entity.id
+        @sparse[entity.id] >= 0
       {% end %}
     end
 
@@ -215,7 +225,7 @@ module ECS
       {% elsif T.annotation(ECS::MultipleComponents) %}
         # raise "removing multiple components is not supported"
         @cache_entity = NO_ENTITY # because many entites are affected
-        @sparse.delete entity.id
+        @sparse[entity.id] = -1
         # we just iterate over all array
         # TODO - faster method
         (@used - 1).downto(0) do |i|
@@ -227,7 +237,7 @@ module ECS
       {% else %}
         item = entity_to_id entity.id
         @cache_entity = NO_ENTITY if @cache_index == item || @cache_index == @used - 1
-        @sparse.delete entity.id
+        @sparse[entity.id] = -1
         release_index item
         @world.check_gc_entity entity
       {% end %}
@@ -250,7 +260,7 @@ module ECS
       {% if T.annotation(ECS::SingletonComponent) %}
         @used = 0
       {% else %}
-        @sparse.clear
+        @sparse.fill(-1)
         @used = 0
         @cache_entity = NO_ENTITY
       {% end %}
@@ -363,7 +373,11 @@ module ECS
     end
 
     def inspect(io)
-      io << "World{max_ent=" << @free_entities.count << "}"
+      io << "World{entities: " << entities_count << "}"
+    end
+
+    def entities_count
+      @free_entities.count
     end
 
     # Creates new entity in a world context.
@@ -371,7 +385,8 @@ module ECS
     # Entity don't take up space without components.
     def new_entity
       if @free_entities.remaining <= 0
-        @free_entities.resize(@free_entities.@count*2)
+        @free_entities.resize(@free_entities.count*2)
+        @pools.each &.resize_sparse(@free_entities.count)
       end
       Entity.new(self, EntityID.new(@free_entities.next_item + 1))
     end
@@ -886,6 +901,7 @@ class LinkedList
   @array : Array(Int32)
   @root = 0
   getter remaining = 0
+  getter count = 0
 
   def initialize(@count : Int32)
     @remaining = @count
