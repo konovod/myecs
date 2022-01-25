@@ -32,8 +32,8 @@ describe ECS do
     ent = world.new_entity
     ent.add(Pos.new(1, 1))
     ent.getPos.should eq Pos.new(1, 1)
-    typeof(ent.getPos).should eq (Pos)
-    typeof(ent.getPos?).should eq (Pos | Nil)
+    typeof(ent.getPos).should eq(Pos)
+    typeof(ent.getPos?).should eq(Pos | Nil)
     ent.has?(Pos).should be_true
     ent.has?(Speed).should be_false
     ent.getSpeed?.should be_nil
@@ -740,6 +740,22 @@ describe ECS::World do
     ent.add(Speed.new(2, 2))
     ent = world.new_entity.add(Pos.new(1, 1))
     world.stats.should eq({"Speed" => 1, "Pos" => 2})
+  end
+
+  it "don't hangs if component is added during iterating on it" do
+    world = ECS::World.new
+    world.new_entity.add(Pos.new(1, 1))
+    world.new_entity.add(Pos.new(2, 2))
+    iter = 0
+    world.of(Pos).each_entity do |ent|
+      pos = ent.getPos
+      ent.replace(Pos, Speed.new(pos.x, pos.y))
+      speed = ent.getSpeed
+      ent.replace(Speed, Pos.new(speed.vx, speed.vy))
+      iter += 1
+      break if iter > 10
+    end
+    p iter, world.pool_for(Pos.new(1, 1))
   end
 end
 
