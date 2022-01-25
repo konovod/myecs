@@ -249,13 +249,13 @@ module ECS
 
     def each_entity(& : EntityID ->)
       {% if !T.annotation(ECS::SingletonComponent) %}
-        first = 0
-        last = @used
-        (first...last).each do |i|
+        i = 0
+        while i < @used
           ent = @corresponding[i]
           @cache_index = i
           @cache_entity = ent
           yield(ent)
+          i += 1 if @corresponding[i] == ent
         end
       {% end %}
     end
@@ -831,8 +831,12 @@ module ECS
       @world.register_singleframe_deleter(@typ)
     end
 
-    def execute
-      @world.base_pool_for(@typ).clear
+    def filter(world)
+      @world.of(@typ)
+    end
+
+    def process(entity)
+      entity.remove(@typ)
     end
   end
 
