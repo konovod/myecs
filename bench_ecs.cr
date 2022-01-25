@@ -174,8 +174,25 @@ class SystemReplaceComp1 < ECS::System
   def process(entity)
     comp = entity.getComp1
     entity.replace(Comp1, Comp5.new(-comp.x, -comp.y))
-    comp5 = entity.getComp5
-    entity.replace(Comp5, Comp1.new(-comp.x, -comp.y))
+  end
+end
+
+class SystemReplaceComp5 < ECS::System
+  def filter(world)
+    world.of(Comp5)
+  end
+
+  def process(entity)
+    comp = entity.getComp5
+    entity.replace(Comp5, Comp1.new(-comp.vx, -comp.vy))
+  end
+end
+
+class SystemReplaceComps < ECS::Systems
+  def initialize(@world)
+    super
+    add SystemReplaceComp1.new(@world)
+    add SystemReplaceComp5.new(@world)
   end
 end
 
@@ -327,7 +344,7 @@ benchmark_list(EmptySystem,
 benchmark_list(SystemCountComp1,
   SystemUpdateComp1,
   SystemUpdateComp1UsingPtr,
-  SystemReplaceComp1,
+  SystemReplaceComps,
   SystemPassEvents,
 )
 
