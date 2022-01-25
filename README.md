@@ -394,37 +394,37 @@ end
 ```
 
 ## Benchmarks
-I'm comparing it with https://github.com/spoved/entitas.cr with some "realistic" scenario - creating world with 1_000_000 entities, adding and removing components in it, iterating over components, replacing components with another etc.
-You can see I'm not actually beating it in all areas (I'm much slower in access but much faster in creation), but my ECS looks fast enough for me. What is I'm proud - 0.0B/op for all operations (after initial growth of pools)
+I'm comparing it with https://github.com/spoved/entitas.cr with some "realistic" scenario - creating world with 1_000_000 entities (with 100 component types), adding and removing components in it, iterating over components, replacing components with another etc.
+You can see I'm not actually beating it in all areas (I'm much slower in access but much faster in creation and updating), but my ECS looks fast enough for me. What is I'm proud - 0.0B/op for all operations (after initial growth of pools)
 
 my ECS:
 ```
 ***********************************************
-              create empty world  84.22k ( 11.87µs) (±11.11%)  58.6kB/op          fastest
-          create benchmark world  15.63  ( 63.96ms) (±11.85%)   246MB/op  5386.81× slower
-create and clear benchmark world  15.15  ( 65.99ms) (±11.37%)   246MB/op  5557.26× slower
+              create empty world   8.79k (113.79µs) (± 5.56%)   484kB/op          fastest
+          create benchmark world   5.30  (188.75ms) (±12.68%)  1.02GB/op  1658.69× slower
+create and clear benchmark world   4.40  (227.10ms) (± 1.41%)  1.02GB/op  1995.69× slower
 ***********************************************
-                   EmptySystem 185.63M (  5.39ns) (± 2.79%)  0.0B/op        fastest
-             EmptyFilterSystem  33.41M ( 29.93ns) (± 1.27%)  0.0B/op   5.56× slower
-SystemAddDeleteSingleComponent  23.68M ( 42.23ns) (±21.26%)  0.0B/op   7.84× slower
- SystemAddDeleteFourComponents  11.55M ( 86.55ns) (± 0.85%)  0.0B/op  16.07× slower
-         SystemAskComponent(0) 114.19M (  8.76ns) (± 1.41%)  0.0B/op   1.63× slower
-         SystemAskComponent(1) 114.25M (  8.75ns) (± 1.02%)  0.0B/op   1.62× slower
-         SystemGetComponent(0) 127.06M (  7.87ns) (± 1.82%)  0.0B/op   1.46× slower
-         SystemGetComponent(1) 112.55M (  8.89ns) (± 1.22%)  0.0B/op   1.65× slower
-   SystemGetSingletonComponent 116.45M (  8.59ns) (± 1.13%)  0.0B/op   1.59× slower
- IterateOverCustomFilterSystem  88.22M ( 11.33ns) (± 0.91%)  0.0B/op   2.10× slower
+                   EmptySystem 161.99M (  6.17ns) (± 2.14%)  0.0B/op        fastest
+             EmptyFilterSystem  35.11M ( 28.48ns) (± 1.41%)  0.0B/op   4.61× slower
+SystemAddDeleteSingleComponent  33.49M ( 29.86ns) (± 2.79%)  0.0B/op   4.84× slower
+ SystemAddDeleteFourComponents   2.66M (375.95ns) (± 1.04%)  0.0B/op  60.90× slower
+         SystemAskComponent(0) 124.19M (  8.05ns) (± 2.22%)  0.0B/op   1.30× slower
+         SystemAskComponent(1) 124.24M (  8.05ns) (± 2.14%)  0.0B/op   1.30× slower
+         SystemGetComponent(0) 120.09M (  8.33ns) (± 3.09%)  0.0B/op   1.35× slower
+         SystemGetComponent(1)  99.88M ( 10.01ns) (± 3.69%)  0.0B/op   1.62× slower
+   SystemGetSingletonComponent 121.27M (  8.25ns) (± 2.82%)  0.0B/op   1.34× slower
+ IterateOverCustomFilterSystem  77.77M ( 12.86ns) (± 2.89%)  0.0B/op   2.08× slower
 ***********************************************
-         SystemCountComp1 257.13  (  3.89ms) (± 0.23%)  0.0B/op        fastest
-        SystemUpdateComp1 110.32  (  9.06ms) (± 0.25%)  0.0B/op   2.33× slower
-SystemUpdateComp1UsingPtr 221.70  (  4.51ms) (± 0.31%)  0.0B/op   1.16× slower
-       SystemReplaceComp1  25.79  ( 38.77ms) (± 0.51%)  0.0B/op   9.97× slower
-         SystemPassEvents  59.42  ( 16.83ms) (± 0.21%)  0.0B/op   4.33× slower
+         SystemCountComp1 245.30  (  4.08ms) (± 0.83%)  0.0B/op        fastest
+        SystemUpdateComp1 110.80  (  9.03ms) (± 0.89%)  0.0B/op   2.21× slower
+SystemUpdateComp1UsingPtr 208.47  (  4.80ms) (± 1.06%)  0.0B/op   1.18× slower
+       SystemReplaceComps  32.71  ( 30.58ms) (± 0.79%)  0.0B/op   7.50× slower
+         SystemPassEvents  28.22  ( 35.44ms) (± 0.98%)  0.0B/op   8.69× slower
 ***********************************************
-         FullFilterSystem  20.03  ( 49.93ms) (± 1.76%)  0.0B/op  12.76× slower
-    FullFilterAnyOfSystem  86.23  ( 11.60ms) (± 0.46%)  0.0B/op   2.96× slower
-      SystemComplexFilter 255.62  (  3.91ms) (± 1.14%)  0.0B/op        fastest
-SystemComplexSelectFilter 235.79  (  4.24ms) (± 0.20%)  0.0B/op   1.08× slower
+         FullFilterSystem 143.00  (  6.99ms) (± 1.66%)  0.0B/op   1.70× slower
+    FullFilterAnyOfSystem 101.43  (  9.86ms) (± 1.30%)  0.0B/op   2.40× slower
+      SystemComplexFilter 112.97  (  8.85ms) (± 1.49%)  0.0B/op   2.15× slower
+SystemComplexSelectFilter 243.34  (  4.11ms) (± 3.10%)  0.0B/op        fastest
 ```
 Entitas.cr (it is slightly outdated so you will have problems to make it work)
 ```
@@ -456,8 +456,9 @@ FullFilterAnyOfSystem 216.47M (  4.62ns) (± 2.01%)  0.0B/op          fastest
 ### Short-term
 - [x] Reuse entity identifier, allows to replace `@sparse` hash with array
 - [ ] generations of EntityID to catch usage of deleted entities
-- [ ] better API for multiple components - iterating, array, deleting onle one
+- [ ] better API for multiple components - iterating, array, deleting only one
 - [ ] optimally delete multiple components (linked list)
+- [ ] bitmasks for entities. Could they improve performance?
 - [X] check that all singleframe components are deleted somewhere
 - [ ] benchmark comparison with flecs (https://github.com/jemc/crystal-flecs)
 ### Future
