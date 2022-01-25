@@ -1,6 +1,8 @@
 require "benchmark"
 require "./src/myecs"
 
+BENCH_COMPONENTS = 100
+
 record Comp1 < ECS::Component, x : Int32, y : Int32 do
   def change_x(value)
     @x = value
@@ -10,6 +12,10 @@ record Comp2 < ECS::Component, name : String
 record Comp3 < ECS::Component, heavy : StaticArray(Int32, 64)
 record Comp4 < ECS::Component
 record Comp5 < ECS::Component, vx : Int32, vy : Int32
+
+{% for i in 1..BENCH_COMPONENTS %} 
+record BenchComp{{i}} < ECS::Component, vx : Int32, vy : Int32
+{% end %}
 
 @[ECS::SingleFrame]
 record TestEvent1 < ECS::Component
@@ -271,6 +277,10 @@ def init_benchmark_world(n)
   config.values["value"] = 1
   world.new_entity.add(config)
   world.new_entity.add(Comp5.new(0, 0)).remove(Comp5) # to init pool
+  {% for i in 1..BENCH_COMPONENTS %} 
+    world.new_entity.add(BenchComp{{i}}.new({{i}},{{i}}))
+  {% end %}
+
   n.times do |i|
     ent = world.new_entity
     ent.add(Comp1.new(i, i)) if i % 2 == 0
