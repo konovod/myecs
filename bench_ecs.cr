@@ -1,6 +1,12 @@
 require "benchmark"
 require "./src/myecs"
 
+BENCH_COMPONENTS = 100
+
+{% for i in 1..BENCH_COMPONENTS %} 
+record BenchComp{{i}} < ECS::Component, vx : Int32, vy : Int32
+{% end %}
+
 record Comp1 < ECS::Component, x : Int32, y : Int32 do
   def change_x(value)
     @x = value
@@ -174,8 +180,25 @@ class SystemReplaceComp1 < ECS::System
   def process(entity)
     comp = entity.getComp1
     entity.replace(Comp1, Comp5.new(-comp.x, -comp.y))
-    comp5 = entity.getComp5
-    entity.replace(Comp5, Comp1.new(-comp.x, -comp.y))
+  end
+end
+
+class SystemReplaceComp5 < ECS::System
+  def filter(world)
+    world.of(Comp5)
+  end
+
+  def process(entity)
+    comp = entity.getComp5
+    entity.replace(Comp5, Comp1.new(-comp.vx, -comp.vy))
+  end
+end
+
+class SystemReplaceComps < ECS::Systems
+  def initialize(@world)
+    super
+    add SystemReplaceComp1.new(@world)
+    add SystemReplaceComp5.new(@world)
   end
 end
 
@@ -254,12 +277,17 @@ def init_benchmark_world(n)
   config.values["value"] = 1
   world.new_entity.add(config)
   world.new_entity.add(Comp5.new(0, 0)).remove(Comp5) # to init pool
+  {% for i in 1..BENCH_COMPONENTS %} 
+    world.new_entity.add(BenchComp{{i}}.new({{i}},{{i}}))
+  {% end %}
+
   n.times do |i|
     ent = world.new_entity
     ent.add(Comp1.new(i, i)) if i % 2 == 0
     ent.add(Comp2.new(i.to_s)) if i % 3 == 0
     ent.add(Comp3.new(StaticArray(Int32, 64).new { |x| x + i })) if i % 5 == 0
     ent.add(Comp4.new) if i % 7 == 0
+    ent.destroy_if_empty
   end
   return world
 end
@@ -269,6 +297,7 @@ BENCH_WARMUP =       1
 BENCH_TIME   =       2
 
 def benchmark_creation
+  puts "***********************************************"
   Benchmark.ips(warmup: BENCH_WARMUP, calculation: BENCH_TIME) do |bm|
     bm.report("create empty world") do
       world = ECS::World.new
@@ -326,7 +355,7 @@ benchmark_list(EmptySystem,
 benchmark_list(SystemCountComp1,
   SystemUpdateComp1,
   SystemUpdateComp1UsingPtr,
-  SystemReplaceComp1,
+  SystemReplaceComps,
   SystemPassEvents,
 )
 

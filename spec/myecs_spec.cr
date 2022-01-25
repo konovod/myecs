@@ -32,8 +32,8 @@ describe ECS do
     ent = world.new_entity
     ent.add(Pos.new(1, 1))
     ent.getPos.should eq Pos.new(1, 1)
-    typeof(ent.getPos).should eq (Pos)
-    typeof(ent.getPos?).should eq (Pos | Nil)
+    typeof(ent.getPos).should eq(Pos)
+    typeof(ent.getPos?).should eq(Pos | Nil)
     ent.has?(Pos).should be_true
     ent.has?(Speed).should be_false
     ent.getSpeed?.should be_nil
@@ -53,6 +53,7 @@ describe ECS do
   it "entity can add and delete component repeatedly" do
     world = ECS::World.new
     ent = world.new_entity
+    ent.add(Speed.new(1, 1))
     pos = Pos.new(5, 6)
     10.times do
       ent.add(pos)
@@ -740,6 +741,55 @@ describe ECS::World do
     ent.add(Speed.new(2, 2))
     ent = world.new_entity.add(Pos.new(1, 1))
     world.stats.should eq({"Speed" => 1, "Pos" => 2})
+  end
+
+  it "raises on reuse of deleted entities" do
+    world = ECS::World.new
+    ent = world.new_entity.add(Pos.new(1, 1))
+    ent.remove(Pos)
+    expect_raises(Exception) { ent.add(Speed.new(1, 1)) }
+  end
+
+  it "don't hangs if component is just added during iterating on it" do
+    world = ECS::World.new
+    world.new_entity.add(Pos.new(1, 1))
+    world.new_entity.add(Pos.new(2, 2))
+    iter = 0
+    world.of(Pos).each_entity do |ent|
+      pos = ent.getPos
+      world.new_entity.add(pos) if world.entities_count < 5
+      iter += 1
+      raise "hangs up" if iter > 10
+    end
+  end
+
+  it "don't hangs if component is deleted and added during iterating on it" do
+    world = ECS::World.new
+    world.new_entity.add(Pos.new(1, 1))
+    world.new_entity.add(Pos.new(2, 2))
+    iter = 0
+    world.of(Pos).each_entity do |ent|
+      pos = ent.getPos
+      ent.remove(Pos)
+      world.new_entity.add(pos)
+      iter += 1
+      raise "hangs up" if iter > 10
+    end
+  end
+
+  it "don't hangs if component is replaced during iterating on it" do
+    world = ECS::World.new
+    world.new_entity.add(Pos.new(1, 1))
+    world.new_entity.add(Pos.new(2, 2))
+    iter = 0
+    world.of(Pos).each_entity do |ent|
+      pos = ent.getPos
+      ent.replace(Pos, Speed.new(pos.x, pos.y))
+      speed = ent.getSpeed
+      ent.replace(Speed, Pos.new(speed.vx, speed.vy))
+      iter += 1
+      raise "hangs up" if iter > 10
+    end
   end
 end
 
