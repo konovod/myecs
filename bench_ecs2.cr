@@ -117,14 +117,14 @@ macro benchmark_list(three, *list)
   worldp = init_benchmark_world(BENCH_N, {{three}}, true)
   puts world.stats
   puts worldp.stats
-  list = [] of ECS::Systems
+  list = [] of {ECS::Systems, String}
   {% for cls in list %}
     %sys = ECS::Systems.new(world)
     %sys.add({{cls}})
-    list << %sys
+    list << { %sys, ""}
     %sys2 = ECS::Systems.new(worldp)
     %sys2.add({{cls}})
-    list << %sys2
+    list << { %sys2, "padded"}
   {% end %}
 
   Benchmark.ips(warmup: BENCH_WARMUP, calculation: BENCH_TIME) do |bm|
@@ -133,18 +133,16 @@ macro benchmark_list(three, *list)
         direct_increment(world, {{three}})
       end
 
-    list.each do |sys|
+    list.each do |(sys, prefix)|
       sys.init
       sys.execute
-      bm.report(sys.children[0].class.name) do
+      bm.report("#{prefix} #{sys.children[0].class.name}") do
         sys.execute
       end
       # sys.teardown fails due to bm imlementation?
     end
   end
 end
-
-# puts init_benchmark_world(BENCH_N).stats
 
 benchmark_list(false,
   SystemUpdateComp1,
