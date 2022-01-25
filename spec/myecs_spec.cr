@@ -53,6 +53,7 @@ describe ECS do
   it "entity can add and delete component repeatedly" do
     world = ECS::World.new
     ent = world.new_entity
+    ent.add(Speed.new(1, 1))
     pos = Pos.new(5, 6)
     10.times do
       ent.add(pos)
@@ -742,7 +743,41 @@ describe ECS::World do
     world.stats.should eq({"Speed" => 1, "Pos" => 2})
   end
 
-  it "don't hangs if component is added during iterating on it" do
+  it "raises on reuse of deleted entities" do
+    world = ECS::World.new
+    ent = world.new_entity.add(Pos.new(1, 1))
+    ent.remove(Pos)
+    expect_raises(Exception) { ent.add(Speed.new(1, 1)) }
+  end
+
+  it "don't hangs if component is just added during iterating on it" do
+    world = ECS::World.new
+    world.new_entity.add(Pos.new(1, 1))
+    world.new_entity.add(Pos.new(2, 2))
+    iter = 0
+    world.of(Pos).each_entity do |ent|
+      pos = ent.getPos
+      world.new_entity.add(pos) if world.entities_count < 5
+      iter += 1
+      raise "hangs up" if iter > 10
+    end
+  end
+
+  it "don't hangs if component is deleted and added during iterating on it" do
+    world = ECS::World.new
+    world.new_entity.add(Pos.new(1, 1))
+    world.new_entity.add(Pos.new(2, 2))
+    iter = 0
+    world.of(Pos).each_entity do |ent|
+      pos = ent.getPos
+      ent.remove(Pos)
+      world.new_entity.add(pos)
+      iter += 1
+      raise "hangs up" if iter > 10
+    end
+  end
+
+  it "don't hangs if component is replaced during iterating on it" do
     world = ECS::World.new
     world.new_entity.add(Pos.new(1, 1))
     world.new_entity.add(Pos.new(2, 2))
@@ -753,9 +788,8 @@ describe ECS::World do
       speed = ent.getSpeed
       ent.replace(Speed, Pos.new(speed.vx, speed.vy))
       iter += 1
-      break if iter > 10
+      raise "hangs up" if iter > 10
     end
-    p iter, world.pool_for(Pos.new(1, 1))
   end
 end
 

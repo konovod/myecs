@@ -3,6 +3,10 @@ require "./src/myecs"
 
 BENCH_COMPONENTS = 100
 
+{% for i in 1..BENCH_COMPONENTS %} 
+record BenchComp{{i}} < ECS::Component, vx : Int32, vy : Int32
+{% end %}
+
 record Comp1 < ECS::Component, x : Int32, y : Int32 do
   def change_x(value)
     @x = value
@@ -12,10 +16,6 @@ record Comp2 < ECS::Component, name : String
 record Comp3 < ECS::Component, heavy : StaticArray(Int32, 64)
 record Comp4 < ECS::Component
 record Comp5 < ECS::Component, vx : Int32, vy : Int32
-
-{% for i in 1..BENCH_COMPONENTS %} 
-record BenchComp{{i}} < ECS::Component, vx : Int32, vy : Int32
-{% end %}
 
 @[ECS::SingleFrame]
 record TestEvent1 < ECS::Component
@@ -297,6 +297,7 @@ BENCH_WARMUP =       1
 BENCH_TIME   =       2
 
 def benchmark_creation
+  puts "***********************************************"
   Benchmark.ips(warmup: BENCH_WARMUP, calculation: BENCH_TIME) do |bm|
     bm.report("create empty world") do
       world = ECS::World.new

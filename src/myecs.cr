@@ -88,6 +88,7 @@ module ECS
     # Entity ID is marked as free and can be reused
     def destroy
       @world.pools.each do |pool|
+        # break if @world.count_components[@id] <= World::ENTITY_EMPTY #seems to be slower
         pool.try_remove_component(@id, dont_gc: true)
       end
       @world.gc_entity @id
@@ -237,12 +238,14 @@ module ECS
             release_index i
           end
         end
+        @world.dec_count_components(entity, dont_gc)
         @world.check_gc_entity(entity) unless dont_gc
       {% else %}
         item = entity_to_id entity
         @cache_entity = NO_ENTITY if @cache_index == item || @cache_index == @used - 1
         @sparse[entity] = -1
         release_index item
+        @world.dec_count_components(entity, dont_gc)
         @world.check_gc_entity(entity) unless dont_gc
       {% end %}
     end
@@ -250,7 +253,8 @@ module ECS
     def each_entity(& : EntityID ->)
       {% if !T.annotation(ECS::SingletonComponent) %}
         i = 0
-        while i < @used
+        @used.times do |iter|
+          break if i >= @used
           ent = @corresponding[i]
           @cache_index = i
           @cache_entity = ent
@@ -279,6 +283,11 @@ module ECS
         pointer[0] = item.as(Component).as(T)
         @used = 1
       {% else %}
+        {% if T.annotation(ECS::MultipleComponents) %}
+          @world.inc_count_components(entity) unless has_component?(entity)
+        {% else %}
+          @world.inc_count_components(entity)
+        {% end %}
         fresh = get_free_index
         pointer[fresh] = item.as(Component).as(T)
         @sparse[entity] = fresh
@@ -354,6 +363,7 @@ module ECS
   # Root level container for all entities / components, is iterated with `ECS::Systems`
   class World
     @free_entities = LinkedList.new(DEFAULT_ENTITY_POOL_SIZE)
+    protected getter count_components = Slice(UInt16).new(DEFAULT_ENTITY_POOL_SIZE)
     protected getter pools = Array(BasePool).new({{Component.all_subclasses.size}})
 
     @@comp_can_be_multiple = Set(ComponentType).new
@@ -393,10 +403,14 @@ module ECS
     # Entity don't take up space without components.
     def new_entity
       if @free_entities.remaining <= 0
-        @free_entities.resize(@free_entities.count*2)
-        @pools.each &.resize_sparse(@free_entities.count)
+        n = @free_entities.count*2
+        @free_entities.resize(n)
+        @count_components = @count_components.to_unsafe.realloc(n).to_slice(n)
+        @pools.each &.resize_sparse(n)
       end
-      Entity.new(self, EntityID.new(@free_entities.next_item))
+      id = @free_entities.next_item
+      @count_components[id] = ENTITY_EMPTY
+      Entity.new(self, EntityID.new(id))
     end
 
     # Creates new Filter.
@@ -410,21 +424,29 @@ module ECS
     def delete_all
       @free_entities.clear
       @pools.each &.clear
+      @count_components.fill(ENTITY_DELETED)
     end
 
-    @processed = Set(EntityID).new(DEFAULT_ENTITY_POOL_SIZE)
-
-    # Iterates over all entities
     def each_entity(& : Entity ->)
-      return if pools.size == 0
-      @pools.each do |pool|
-        pool.each_entity do |ent|
-          next if @processed.includes? ent
-          yield(Entity.new(self, ent))
-          @processed.add(ent)
-        end
+      entities_capacity.times do |i|
+        next if @count_components[i] <= ENTITY_EMPTY
+        yield(Entity.new(self, EntityID.new(i)))
       end
-      @processed.clear
+    end
+
+    ENTITY_DELETED = 0u16
+    ENTITY_EMPTY   = 1u16
+
+    protected def inc_count_components(entity_id)
+      raise "adding component to deleted entity: #{entity_id}" if @count_components[entity_id] == ENTITY_DELETED
+      @count_components[entity_id] &+= 1
+      # raise "BUG: inc_count_components failed" if @count_components[entity_id] > pools.size
+    end
+
+    protected def dec_count_components(entity_id, dont_gc)
+      # raise "BUG: dec_count_components failed" if @count_components[entity_id] <= ENTITY_EMPTY
+      @count_components[entity_id] &-= 1
+      @count_components[entity_id] = ENTITY_DELETED if @count_components[entity_id] == ENTITY_EMPTY && !dont_gc
     end
 
     # Returns true if at least one component of type `typ` exists in a world
@@ -438,10 +460,7 @@ module ECS
     end
 
     protected def check_gc_entity(entity)
-      @pools.each do |pool|
-        return if !pool.is_singleton && pool.has_component? entity
-      end
-      @free_entities.release(Int32.new(entity))
+      @free_entities.release(Int32.new(entity)) if @count_components[entity] == ENTITY_DELETED
     end
 
     protected def gc_entity(entity)
@@ -758,7 +777,7 @@ module ECS
         iterate_over_type(smallest_all) do |entity|
           yield(entity)
         end
-      elsif smallest_any
+      elsif smallest_any && (@any_multiple_component_index || smallest_any_count < @world.entities_count // 2)
         # iterate by smallest_any
         iterate_over_list(smallest_any) do |entity|
           yield(entity)
