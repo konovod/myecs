@@ -2,6 +2,12 @@ module ECS
   # Component - container for user data without / with small logic inside.
   # All components should be inherited from `ECS::Component`
   abstract struct Component
+    macro inherited
+      @[AlwaysInline]
+      def self.component_index
+        {{ECS::Component.all_subclasses.size}}
+      end
+    end
   end
 
   # Represents component that should exist for one frame and be deleted after.
@@ -102,7 +108,7 @@ module ECS
       {% for obj, index in Component.all_subclasses %} 
       {% obj_name = obj.id.split("::").last.id %}
       def get{{obj_name}}
-      @world.pools[{{index}}].as(Pool({{obj}})).get_component?(@id) || raise "{{obj}} not present on entity #{self}"
+        @world.pools[{{index}}].as(Pool({{obj}})).get_component?(@id) || raise "{{obj}} not present on entity #{self}"
       end
   
       def get{{obj_name}}?
@@ -216,16 +222,18 @@ module ECS
         @used = 0
       {% else %}
         raise "can't remove component #{self.class} from #{entity}" unless has_component?(entity)
-        remove_component_without_check(entity, dont_gc: dont_gc)
+        remove_component_without_check(entity)
+        @world.dec_count_components(entity, dont_gc)
       {% end %}
     end
 
     def try_remove_component(entity, *, dont_gc = false)
       return unless has_component?(entity)
-      remove_component_without_check(entity, dont_gc: dont_gc)
+      remove_component_without_check(entity)
+      @world.dec_count_components(entity, dont_gc)
     end
 
-    def remove_component_without_check(entity, *, dont_gc = false)
+    def remove_component_without_check(entity)
       {% if T.annotation(ECS::SingletonComponent) %}
       {% elsif T.annotation(ECS::MultipleComponents) %}
         # raise "removing multiple components is not supported"
@@ -238,15 +246,11 @@ module ECS
             release_index i
           end
         end
-        @world.dec_count_components(entity, dont_gc)
-        @world.check_gc_entity(entity) unless dont_gc
       {% else %}
         item = entity_to_id entity
         @cache_entity = NO_ENTITY if @cache_index == item || @cache_index == @used - 1
         @sparse[entity] = -1
         release_index item
-        @world.dec_count_components(entity, dont_gc)
-        @world.check_gc_entity(entity) unless dont_gc
       {% end %}
     end
 
@@ -437,16 +441,21 @@ module ECS
     ENTITY_DELETED = 0u16
     ENTITY_EMPTY   = 1u16
 
+    @[AlwaysInline]
     protected def inc_count_components(entity_id)
       raise "adding component to deleted entity: #{entity_id}" if @count_components[entity_id] == ENTITY_DELETED
       @count_components[entity_id] &+= 1
       # raise "BUG: inc_count_components failed" if @count_components[entity_id] > pools.size
     end
 
+    @[AlwaysInline]
     protected def dec_count_components(entity_id, dont_gc)
       # raise "BUG: dec_count_components failed" if @count_components[entity_id] <= ENTITY_EMPTY
       @count_components[entity_id] &-= 1
-      @count_components[entity_id] = ENTITY_DELETED if @count_components[entity_id] == ENTITY_EMPTY && !dont_gc
+      if @count_components[entity_id] == ENTITY_EMPTY && !dont_gc
+        @count_components[entity_id] = ENTITY_DELETED
+        gc_entity(entity_id)
+      end
     end
 
     # Returns true if at least one component of type `typ` exists in a world
@@ -459,10 +468,12 @@ module ECS
       SimpleFilter.new(self, typ)
     end
 
+    @[AlwaysInline]
     protected def check_gc_entity(entity)
       @free_entities.release(Int32.new(entity)) if @count_components[entity] == ENTITY_DELETED
     end
 
+    @[AlwaysInline]
     protected def gc_entity(entity)
       @free_entities.release(Int32.new(entity))
     end
@@ -478,6 +489,7 @@ module ECS
       end
 
       {% for obj, index in Component.all_subclasses %} 
+        @[AlwaysInline]
         def pool_for(component : {{obj}}) : Pool({{obj}})
           @pools[{{index}}].as(Pool({{obj}}))
         end
@@ -499,11 +511,9 @@ module ECS
     
       {% end %}
 
+      @[AlwaysInline]
       protected def base_pool_for(typ : ComponentType)
-          {% for obj, index in Component.all_subclasses %} 
-            return @pools[{{index}}] if typ == {{obj}}
-          {% end %}
-            raise "unregistered component type: #{typ}"
+        @pools[typ.component_index]
       end
 
       # Non-allocating version of `stats`. Yields pairs of component name and count of corresponding components
