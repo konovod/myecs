@@ -89,15 +89,15 @@ module ECS
     # Destroys entity removing all components from it.
     # Entity ID is marked as free and can be reused
     def destroy
-      @world.pools.each do |pool|
+      @world.pools.each_with_index do |pool, index|
         # break if @world.count_components[@id] <= World::ENTITY_EMPTY #seems to be slower
-        pool.try_remove_component(@id, dont_gc: true)
+        pool.try_remove_component(@id, dont_gc: true) if @world.has_component?(@id, index)
       end
       @world.gc_entity @id
     end
 
     def destroy_if_empty
-      @world.check_gc_entity @id
+      @world.destroy_if_empty @id
     end
 
     macro finished
@@ -208,8 +208,9 @@ module ECS
       {% if T.annotation(ECS::SingletonComponent) %}
         @used > 0
       {% else %}
-        return true if entity == @cache_entity
-        @sparse[entity] >= 0
+        @world.has_component?(entity, T)
+        # return true if entity == @cache_entity
+        # @sparse[entity] >= 0
       {% end %}
     end
 
@@ -286,11 +287,7 @@ module ECS
         pointer[0] = item.as(Component).as(T)
         @used = 1
       {% else %}
-        {% if T.annotation(ECS::MultipleComponents) %}
-          @world.inc_count_components(entity, T) unless has_component?(entity)
-        {% else %}
-          @world.inc_count_components(entity, T)
-        {% end %}
+        @world.inc_count_components(entity, T)
         fresh = get_free_index
         pointer[fresh] = item.as(Component).as(T)
         @sparse[entity] = fresh
@@ -391,6 +388,14 @@ module ECS
       @count_components = BitArray.new(entity_bitsize * DEFAULT_ENTITY_POOL_SIZE)
     end
 
+    protected def has_component?(entity, typ) : Bool
+      @count_components[entity * entity_bitsize + 8 + index_for(typ)]
+    end
+
+    protected def has_component?(entity, index : Int32) : Bool
+      @count_components[entity * entity_bitsize + 8 + index]
+    end
+
     protected def can_be_multiple?(typ : ComponentType)
       @@comp_can_be_multiple.includes? typ
     end
@@ -444,6 +449,7 @@ module ECS
     end
 
     protected def inc_count_components(entity_id, typ)
+      raise "adding component to destroyed entity" unless @count_components[entity_id*entity_bitsize + 0]
       # pp! @count_components.size, entity_id, entity_id*entity_bitsize + index_for(typ) + 8, entity_bitsize, index_for(typ)
       @count_components[entity_id*entity_bitsize + index_for(typ) + 8] = true
     end
@@ -469,8 +475,13 @@ module ECS
       end
     end
 
+    protected def destroy_if_empty(entity)
+      gc_entity(entity) if @count_components.zeros?(entity*entity_bitsize + 8, entity_bitsize - 8)
+    end
+
     protected def gc_entity(entity)
-      @count_components.clear(entity*entity_bitsize, entity_bitsize)
+      # @count_components.clear(entity*entity_bitsize, entity_bitsize)
+      @count_components[entity*entity_bitsize + 0] = false
       @free_entities.release(Int32.new(entity))
     end
 
@@ -996,8 +1007,10 @@ ZEROS = BitArray.new(2048)
 
 struct BitArray
   def resize(new_size)
+    old_size = @size
     @size = new_size
     @bits = @bits.realloc(malloc_size)
+    clear(old_size, @size - old_size)
   end
 
   def zeros?(starting_bit, count)

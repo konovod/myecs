@@ -449,7 +449,7 @@ describe ECS::SingletonComponent do
     ent = world.new_entity
     ent.add(Pos.new(1, 1))
     ent.add(Speed.new(10, 10))
-    world.new_entity.add(Config.new(100))
+    world.new_entity.add(Config.new(100)).destroy_if_empty
     count_entities(world).should eq 1
     count_entities(world.of(Config)).should eq 0
   end
