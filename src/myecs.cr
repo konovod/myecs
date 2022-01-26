@@ -1,3 +1,5 @@
+require "bit_array"
+
 module ECS
   # Component - container for user data without / with small logic inside.
   # All components should be inherited from `ECS::Component`
@@ -201,6 +203,7 @@ module ECS
       @corresponding = @corresponding.to_unsafe.realloc(@size).to_slice(@size)
     end
 
+    @[AlwaysInline]
     def has_component?(entity) : Bool
       {% if T.annotation(ECS::SingletonComponent) %}
         @used > 0
@@ -238,14 +241,14 @@ module ECS
             release_index i
           end
         end
-        @world.dec_count_components(entity, dont_gc)
+        @world.dec_count_components(entity, T, dont_gc)
         @world.check_gc_entity(entity) unless dont_gc
       {% else %}
         item = entity_to_id entity
         @cache_entity = NO_ENTITY if @cache_index == item || @cache_index == @used - 1
         @sparse[entity] = -1
         release_index item
-        @world.dec_count_components(entity, dont_gc)
+        @world.dec_count_components(entity, T, dont_gc)
         @world.check_gc_entity(entity) unless dont_gc
       {% end %}
     end
@@ -284,9 +287,9 @@ module ECS
         @used = 1
       {% else %}
         {% if T.annotation(ECS::MultipleComponents) %}
-          @world.inc_count_components(entity) unless has_component?(entity)
+          @world.inc_count_components(entity, T) unless has_component?(entity)
         {% else %}
-          @world.inc_count_components(entity)
+          @world.inc_count_components(entity, T)
         {% end %}
         fresh = get_free_index
         pointer[fresh] = item.as(Component).as(T)
@@ -363,7 +366,12 @@ module ECS
   # Root level container for all entities / components, is iterated with `ECS::Systems`
   class World
     @free_entities = LinkedList.new(DEFAULT_ENTITY_POOL_SIZE)
-    protected getter count_components = Slice(UInt16).new(DEFAULT_ENTITY_POOL_SIZE)
+
+    private def entity_bitsize
+      ({{Component.all_subclasses.size}} // 8)*8 + ({{Component.all_subclasses.size}} % 8 > 0 ? 8 : 0) + 8
+    end
+
+    protected getter count_components = BitArray.new(1)
     protected getter pools = Array(BasePool).new({{Component.all_subclasses.size}})
 
     @@comp_can_be_multiple = Set(ComponentType).new
@@ -380,6 +388,7 @@ module ECS
     # Creates empty world
     def initialize
       init_pools
+      @count_components = BitArray.new(entity_bitsize * DEFAULT_ENTITY_POOL_SIZE)
     end
 
     protected def can_be_multiple?(typ : ComponentType)
@@ -405,11 +414,11 @@ module ECS
       if @free_entities.remaining <= 0
         n = @free_entities.count*2
         @free_entities.resize(n)
-        @count_components = @count_components.to_unsafe.realloc(n).to_slice(n)
+        @count_components.resize(n*entity_bitsize)
         @pools.each &.resize_sparse(n)
       end
       id = @free_entities.next_item
-      @count_components[id] = ENTITY_EMPTY
+      @count_components[id*entity_bitsize + 0] = true
       Entity.new(self, EntityID.new(id))
     end
 
@@ -424,29 +433,24 @@ module ECS
     def delete_all
       @free_entities.clear
       @pools.each &.clear
-      @count_components.fill(ENTITY_DELETED)
+      @count_components.to_slice.fill(0)
     end
 
     def each_entity(& : Entity ->)
       entities_capacity.times do |i|
-        next if @count_components[i] <= ENTITY_EMPTY
+        next unless @count_components[i*entity_bitsize + 0]
         yield(Entity.new(self, EntityID.new(i)))
       end
     end
 
-    ENTITY_DELETED = 0u16
-    ENTITY_EMPTY   = 1u16
-
-    protected def inc_count_components(entity_id)
-      raise "adding component to deleted entity: #{entity_id}" if @count_components[entity_id] == ENTITY_DELETED
-      @count_components[entity_id] &+= 1
-      # raise "BUG: inc_count_components failed" if @count_components[entity_id] > pools.size
+    protected def inc_count_components(entity_id, typ)
+      # pp! @count_components.size, entity_id, entity_id*entity_bitsize + index_for(typ) + 8, entity_bitsize, index_for(typ)
+      @count_components[entity_id*entity_bitsize + index_for(typ) + 8] = true
     end
 
-    protected def dec_count_components(entity_id, dont_gc)
-      # raise "BUG: dec_count_components failed" if @count_components[entity_id] <= ENTITY_EMPTY
-      @count_components[entity_id] &-= 1
-      @count_components[entity_id] = ENTITY_DELETED if @count_components[entity_id] == ENTITY_EMPTY && !dont_gc
+    protected def dec_count_components(entity_id, typ, dont_gc)
+      @count_components[entity_id*entity_bitsize + index_for(typ) + 8] = false
+      @count_components[entity_id*entity_bitsize + 0] = false if !dont_gc && @count_components.zeros?(entity_id*entity_bitsize + 8, entity_bitsize - 8)
     end
 
     # Returns true if at least one component of type `typ` exists in a world
@@ -460,10 +464,13 @@ module ECS
     end
 
     protected def check_gc_entity(entity)
-      @free_entities.release(Int32.new(entity)) if @count_components[entity] == ENTITY_DELETED
+      unless @count_components[entity*entity_bitsize + 0]
+        @free_entities.release(Int32.new(entity))
+      end
     end
 
     protected def gc_entity(entity)
+      @count_components.clear(entity*entity_bitsize, entity_bitsize)
       @free_entities.release(Int32.new(entity))
     end
 
@@ -504,6 +511,12 @@ module ECS
             return @pools[{{index}}] if typ == {{obj}}
           {% end %}
             raise "unregistered component type: #{typ}"
+      end
+      protected def index_for(typ : ComponentType)
+        {% for obj, index in Component.all_subclasses %} 
+          return {{index}} if typ == {{obj}}
+        {% end %}
+          raise "unregistered component type: #{typ}"
       end
 
       # Non-allocating version of `stats`. Yields pairs of component name and count of corresponding components
@@ -976,5 +989,22 @@ class LinkedList
       @array[i] = i + 1
     end
     @root = 0
+  end
+end
+
+ZEROS = BitArray.new(2048)
+
+struct BitArray
+  def resize(new_size)
+    @size = new_size
+    @bits = @bits.realloc(malloc_size)
+  end
+
+  def zeros?(starting_bit, count)
+    return LibC.memcmp(to_slice + starting_bit // 8, ZEROS.@bits, count // 8) == 0
+  end
+
+  def clear(starting_bit, count)
+    (to_slice + starting_bit // 8).to_unsafe.to_slice(count // 8).fill(0)
   end
 end
