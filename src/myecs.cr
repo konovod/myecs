@@ -235,16 +235,85 @@ module ECS
     end
   end
 
-  private class Pool(T) < BasePool
+  private abstract class Pool(T) < BasePool
+  end
+
+  private class SingletonPool(T) < Pool(T)
+    @raw : Pointer(T)
+
+    def initialize(@world : World)
+      super(1, @world)
+      @raw = Pointer(T).malloc(@size)
+    end
+
+    def name
+      T.to_s
+    end
+
+    def is_singleton
+      true
+    end
+
+    def has_component?(entity) : Bool
+      @used > 0
+    end
+
+    def remove_component(entity, *, dont_gc = false)
+      raise "can't remove singleton #{self.class}" if @used == 0
+      @used = 0
+    end
+
+    def remove_component_without_check(entity)
+    end
+
+    def each_entity(& : EntityID ->)
+    end
+
+    def clear
+      @used = 0
+    end
+
+    def pointer
+      @raw
+    end
+
+    def add_component_without_check(entity : EntityID, item)
+      @used = 1
+      @raw.value = comp.as(Component).as(T)
+    end
+
+    def update_component(entity, comp)
+      @used = 1
+      @raw.value = comp.as(Component).as(T)
+    end
+
+    def add_component(entity, comp)
+      @used = 1
+      @raw.value = comp.as(Component).as(T)
+    end
+
+    def add_or_update_component(entity, comp)
+      @used = 1
+      @raw.value = comp.as(Component).as(T)
+    end
+
+    def get_component_ptr(entity)
+      @raw
+    end
+
+    def get_component?(entity)
+      return nil if @used == 0
+      pointer[0]
+    end
+  end
+
+  private class NormalPool(T) < Pool(T)
     @raw : Slice(T)
 
     def initialize(@world : World)
       size = DEFAULT_COMPONENT_POOL_SIZE
       {% if T.annotation(ECS::SingleFrame) %}
         size = DEFAULT_EVENT_POOL_SIZE
-      {% end %}
-      {% if T.annotation(ECS::SingletonComponent) %}
-        size = 1
       {% end %}
       super(size, @world)
       @raw = Pointer(T).malloc(@size).to_slice(@size)
@@ -255,11 +324,7 @@ module ECS
     end
 
     def is_singleton
-      {% if T.annotation(ECS::SingletonComponent) %}
-        true
-      {% else %}
-        false
-      {% end %}
+      false
     end
 
     private def release_index(index)
@@ -274,43 +339,11 @@ module ECS
       @raw = @raw.to_unsafe.realloc(@size).to_slice(@size)
     end
 
-    def has_component?(entity) : Bool
-      {% if T.annotation(ECS::SingletonComponent) %}
-        @used > 0
-      {% else %}
-        super(entity)
-      {% end %}
-    end
-
-    def remove_component(entity, *, dont_gc = false)
-      {% if T.annotation(ECS::SingletonComponent) %}
-        raise "can't remove singleton #{self.class}" if @used == 0
-        @used = 0
-      {% else %}
-        super(entity, dont_gc: dont_gc)
-      {% end %}
-    end
-
     def remove_component_without_check(entity)
-      {% if T.annotation(ECS::SingletonComponent) %}
-      {% elsif T.annotation(ECS::MultipleComponents) %}
+      {% if T.annotation(ECS::MultipleComponents) %}
         remove_component_without_check_multiple(entity)
       {% else %}
         remove_component_without_check_single(entity)
-      {% end %}
-    end
-
-    def each_entity(& : EntityID ->)
-      {% if !T.annotation(ECS::SingletonComponent) %}
-        super { |id| yield id }
-      {% end %}
-    end
-
-    def clear
-      {% if T.annotation(ECS::SingletonComponent) %}
-        @used = 0
-      {% else %}
-        super
       {% end %}
     end
 
@@ -319,79 +352,51 @@ module ECS
     end
 
     def add_component_without_check(entity : EntityID, item)
-      {% if T.annotation(ECS::SingletonComponent) %}
-        pointer[0] = item.as(Component).as(T)
-        @used = 1
+      {% if T.annotation(ECS::MultipleComponents) %}
+        @world.inc_count_components(entity) unless has_component?(entity)
       {% else %}
-        {% if T.annotation(ECS::MultipleComponents) %}
-          @world.inc_count_components(entity) unless has_component?(entity)
-        {% else %}
-          @world.inc_count_components(entity)
-        {% end %}
-        fresh = get_free_index
-        pointer[fresh] = item.as(Component).as(T)
-        @sparse[entity] = fresh
-        @cache_entity = entity
-        @cache_index = fresh
-        @corresponding[fresh] = entity
+        @world.inc_count_components(entity)
       {% end %}
+      fresh = get_free_index
+      pointer[fresh] = item.as(Component).as(T)
+      @sparse[entity] = fresh
+      @cache_entity = entity
+      @cache_index = fresh
+      @corresponding[fresh] = entity
     end
 
     def update_component(entity, comp)
-      {% if T.annotation(ECS::SingletonComponent) %}
-        @used = 1
-        pointer[0] = comp.as(Component).as(T)
-      {% else %}
-        pointer[entity_to_id(entity)] = comp.as(Component).as(T)
-      {% end %}
+      pointer[entity_to_id(entity)] = comp.as(Component).as(T)
     end
 
     def add_component(entity, comp)
-      {% if T.annotation(ECS::SingletonComponent) %}
-        add_or_update_component(entity, comp)
-      {% else %}
-        {% if !T.annotation(ECS::MultipleComponents) %}
-          raise "#{T} already added to #{entity}" if has_component?(entity)
-        {% end %}
+      {% if !T.annotation(ECS::MultipleComponents) %}
+        raise "#{T} already added to #{entity}" if has_component?(entity)
+      {% end %}
+      {% if T.annotation(ECS::SingleFrame) && (!T.annotation(ECS::SingleFrame).named_args.keys.includes?("check".id) || T.annotation(ECS::SingleFrame)[:check]) %}
+        raise "#{T} is created but never deleted" unless @deleter_registered
+      {% end %}
+      add_component_without_check(entity, comp)
+    end
+
+    def add_or_update_component(entity, comp)
+      if has_component?(entity)
+        update_component(entity, comp)
+      else
         {% if T.annotation(ECS::SingleFrame) && (!T.annotation(ECS::SingleFrame).named_args.keys.includes?("check".id) || T.annotation(ECS::SingleFrame)[:check]) %}
           raise "#{T} is created but never deleted" unless @deleter_registered
         {% end %}
         add_component_without_check(entity, comp)
-      {% end %}
-    end
-
-    def add_or_update_component(entity, comp)
-      {% if T.annotation(ECS::SingletonComponent) %}
-        @used = 1
-        pointer[0] = comp.as(Component).as(T)
-      {% else %}
-        if has_component?(entity)
-          update_component(entity, comp)
-        else
-          {% if T.annotation(ECS::SingleFrame) && (!T.annotation(ECS::SingleFrame).named_args.keys.includes?("check".id) || T.annotation(ECS::SingleFrame)[:check]) %}
-            raise "#{T} is created but never deleted" unless @deleter_registered
-          {% end %}
-          add_component_without_check(entity, comp)
-        end
-      {% end %}
+      end
     end
 
     def get_component_ptr(entity)
-      {% if T.annotation(ECS::SingletonComponent) %}
-        pointer.to_unsafe
-      {% else %}
-        (pointer + entity_to_id entity).to_unsafe
-      {% end %}
+      (pointer + entity_to_id entity).to_unsafe
     end
 
     def get_component?(entity)
-      {% if T.annotation(ECS::SingletonComponent) %}
-        return nil if @used == 0
-        pointer[0]
-      {% else %}
-        return nil unless has_component?(entity)
-        pointer[entity_to_id entity]
-      {% end %}
+      return nil unless has_component?(entity)
+      pointer[entity_to_id entity]
     end
   end
 
@@ -512,7 +517,13 @@ module ECS
     macro finished
       private def init_pools
         {% for obj, index in Component.all_subclasses %} 
-          @pools << Pool({{obj}}).new(self) 
+          {% if obj.annotation(ECS::SingletonComponent) %}
+            @pools << SingletonPool({{obj}}).new(self) 
+          {% else %}
+            @pools << NormalPool({{obj}}).new(self) 
+          {% end %}
+
+
           {% if obj.annotation(ECS::MultipleComponents) %}
             @@comp_can_be_multiple.add {{obj}}
           {% end %}
