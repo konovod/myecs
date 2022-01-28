@@ -126,37 +126,21 @@ module ECS
   alias ComponentType = Component.class
 
   private abstract class BasePool
-    abstract def has_component?(entity : EntityID) : Bool
-    abstract def remove_component(entity : EntityID)
-    abstract def try_remove_component(entity : EntityID)
-    abstract def each_entity(& : EntityID ->)
-    abstract def clear
-    abstract def total_count : Int32
-  end
+    def total_count : Int32
+      @used
+    end
 
-  private class Pool(T) < BasePool
     @size : Int32
     @used : Int32 = 0
-    @raw : Slice(T)
     @corresponding : Slice(EntityID)
     @sparse : Slice(Int32)
-    @unsafe_iterating = 0
-
     @cache_entity : EntityID = NO_ENTITY
     @cache_index : Int32 = -1
     property deleter_registered = false
 
-    def initialize(@world : World)
-      @size = DEFAULT_COMPONENT_POOL_SIZE
-      {% if T.annotation(ECS::SingleFrame) %}
-        @size = DEFAULT_EVENT_POOL_SIZE
-      {% end %}
-      {% if T.annotation(ECS::SingletonComponent) %}
-        @size = 1
-      {% end %}
+    def initialize(@size, @world : World)
       @sparse = Pointer(Int32).malloc(@world.entities_capacity).to_slice(@world.entities_capacity)
       @sparse.fill(-1)
-      @raw = Pointer(T).malloc(@size).to_slice(@size)
       @corresponding = Pointer(EntityID).malloc(@size).to_slice(@size)
     end
 
@@ -166,6 +150,104 @@ module ECS
       (old...count).each do |i|
         @sparse[i] = -1
       end
+    end
+
+    protected def grow
+      old_size = @size
+      @size = @size * 2
+      @raw = @raw.to_unsafe.realloc(@size).to_slice(@size)
+      @corresponding = @corresponding.to_unsafe.realloc(@size).to_slice(@size)
+    end
+
+    private def release_index(index)
+      unless index == @used - 1
+        fix_entity = @corresponding[@used - 1]
+        @sparse[fix_entity] = index
+        @corresponding[index] = fix_entity
+      end
+      @used -= 1
+    end
+
+    protected def get_free_index : Int32
+      @used += 1
+      grow if @used >= @size
+      @used - 1
+    end
+
+    def entity_to_id(ent : EntityID) : Int32
+      return @cache_index if @cache_entity == ent
+      @sparse[ent]
+    end
+
+    def has_component?(entity) : Bool
+      return true if entity == @cache_entity
+      @sparse[entity] >= 0
+    end
+
+    def remove_component(entity, *, dont_gc = false)
+      raise "can't remove component #{self.class} from #{entity}" unless has_component?(entity)
+      remove_component_without_check(entity)
+      @world.dec_count_components(entity, dont_gc)
+    end
+
+    def try_remove_component(entity, *, dont_gc = false)
+      return unless has_component?(entity)
+      remove_component_without_check(entity)
+      @world.dec_count_components(entity, dont_gc)
+    end
+
+    def remove_component_without_check_single(entity)
+      item = entity_to_id entity
+      @cache_entity = NO_ENTITY if @cache_index == item || @cache_index == @used - 1
+      @sparse[entity] = -1
+      release_index item
+    end
+
+    def remove_component_without_check_multiple(entity)
+      # raise "removing multiple components is not supported"
+      @cache_entity = NO_ENTITY # because many entites are affected
+      @sparse[entity] = -1
+      # we just iterate over all array
+      # TODO - faster method
+      (@used - 1).downto(0) do |i|
+        if @corresponding[i] == entity
+          release_index i
+        end
+      end
+    end
+
+    def each_entity(& : EntityID ->)
+      i = 0
+      @used.times do |iter|
+        break if i >= @used
+        ent = @corresponding[i]
+        @cache_index = i
+        @cache_entity = ent
+        yield(ent)
+        i += 1 if @corresponding[i] == ent
+      end
+    end
+
+    def clear
+      @sparse.fill(-1)
+      @used = 0
+      @cache_entity = NO_ENTITY
+    end
+  end
+
+  private class Pool(T) < BasePool
+    @raw : Slice(T)
+
+    def initialize(@world : World)
+      size = DEFAULT_COMPONENT_POOL_SIZE
+      {% if T.annotation(ECS::SingleFrame) %}
+        size = DEFAULT_EVENT_POOL_SIZE
+      {% end %}
+      {% if T.annotation(ECS::SingletonComponent) %}
+        size = 1
+      {% end %}
+      super(size, @world)
+      @raw = Pointer(T).malloc(@size).to_slice(@size)
     end
 
     def name
@@ -180,39 +262,23 @@ module ECS
       {% end %}
     end
 
-    private def get_free_index : Int32
-      @used += 1
-      grow if @used >= @size
-      @used - 1
-    end
-
     private def release_index(index)
       unless index == @used - 1
         @raw[index] = @raw[@used - 1]
-        fix_entity = @corresponding[@used - 1]
-        @sparse[fix_entity] = index
-        @corresponding[index] = fix_entity
       end
-      @used -= 1
+      super
     end
 
-    def total_count : Int32
-      @used
-    end
-
-    private def grow
-      old_size = @size
-      @size = @size * 2
+    protected def grow
+      super
       @raw = @raw.to_unsafe.realloc(@size).to_slice(@size)
-      @corresponding = @corresponding.to_unsafe.realloc(@size).to_slice(@size)
     end
 
     def has_component?(entity) : Bool
       {% if T.annotation(ECS::SingletonComponent) %}
         @used > 0
       {% else %}
-        return true if entity == @cache_entity
-        @sparse[entity] >= 0
+        super(entity)
       {% end %}
     end
 
@@ -221,50 +287,22 @@ module ECS
         raise "can't remove singleton #{self.class}" if @used == 0
         @used = 0
       {% else %}
-        raise "can't remove component #{self.class} from #{entity}" unless has_component?(entity)
-        remove_component_without_check(entity)
-        @world.dec_count_components(entity, dont_gc)
+        super(entity, dont_gc: dont_gc)
       {% end %}
-    end
-
-    def try_remove_component(entity, *, dont_gc = false)
-      return unless has_component?(entity)
-      remove_component_without_check(entity)
-      @world.dec_count_components(entity, dont_gc)
     end
 
     def remove_component_without_check(entity)
       {% if T.annotation(ECS::SingletonComponent) %}
       {% elsif T.annotation(ECS::MultipleComponents) %}
-        # raise "removing multiple components is not supported"
-        @cache_entity = NO_ENTITY # because many entites are affected
-        @sparse[entity] = -1
-        # we just iterate over all array
-        # TODO - faster method
-        (@used - 1).downto(0) do |i|
-          if @corresponding[i] == entity
-            release_index i
-          end
-        end
+        remove_component_without_check_multiple(entity)
       {% else %}
-        item = entity_to_id entity
-        @cache_entity = NO_ENTITY if @cache_index == item || @cache_index == @used - 1
-        @sparse[entity] = -1
-        release_index item
+        remove_component_without_check_single(entity)
       {% end %}
     end
 
     def each_entity(& : EntityID ->)
       {% if !T.annotation(ECS::SingletonComponent) %}
-        i = 0
-        @used.times do |iter|
-          break if i >= @used
-          ent = @corresponding[i]
-          @cache_index = i
-          @cache_entity = ent
-          yield(ent)
-          i += 1 if @corresponding[i] == ent
-        end
+        super { |id| yield id }
       {% end %}
     end
 
@@ -272,9 +310,7 @@ module ECS
       {% if T.annotation(ECS::SingletonComponent) %}
         @used = 0
       {% else %}
-        @sparse.fill(-1)
-        @used = 0
-        @cache_entity = NO_ENTITY
+        super
       {% end %}
     end
 
@@ -299,11 +335,6 @@ module ECS
         @cache_index = fresh
         @corresponding[fresh] = entity
       {% end %}
-    end
-
-    def entity_to_id(ent : EntityID) : Int32
-      return @cache_index if @cache_entity == ent
-      @sparse[ent]
     end
 
     def update_component(entity, comp)
