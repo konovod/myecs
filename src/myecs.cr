@@ -236,18 +236,23 @@ module ECS
   end
 
   private abstract class Pool(T) < BasePool
+    def name
+      T.to_s
+    end
+
+    abstract def remove_component_without_check(entity)
+    abstract def update_component(entity, comp)
+    abstract def add_component(entity, comp)
+    abstract def add_or_update_component(entity, comp)
+    abstract def get_component_ptr(entity)
+    abstract def get_component?(entity)
   end
 
   private class SingletonPool(T) < Pool(T)
-    @raw : Pointer(T)
+    @raw = uninitialized T
 
     def initialize(@world : World)
       super(1, @world)
-      @raw = Pointer(T).malloc(@size)
-    end
-
-    def name
-      T.to_s
     end
 
     def is_singleton
@@ -273,37 +278,28 @@ module ECS
       @used = 0
     end
 
-    def pointer
-      @raw
-    end
-
-    def add_component_without_check(entity : EntityID, item)
-      @used = 1
-      @raw.value = comp.as(Component).as(T)
-    end
-
     def update_component(entity, comp)
       @used = 1
-      @raw.value = comp.as(Component).as(T)
+      @raw = comp.as(Component).as(T)
     end
 
     def add_component(entity, comp)
       @used = 1
-      @raw.value = comp.as(Component).as(T)
+      @raw = comp.as(Component).as(T)
     end
 
     def add_or_update_component(entity, comp)
       @used = 1
-      @raw.value = comp.as(Component).as(T)
+      @raw = comp.as(Component).as(T)
     end
 
     def get_component_ptr(entity)
-      @raw
+      pointerof(@raw)
     end
 
     def get_component?(entity)
       return nil if @used == 0
-      pointer[0]
+      @raw
     end
   end
 
