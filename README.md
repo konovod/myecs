@@ -394,73 +394,17 @@ end
 ```
 
 ## Benchmarks
-I'm comparing it with https://github.com/spoved/entitas.cr with some "realistic" scenario - creating world with 1_000_000 entities (with 100 component types), adding and removing components in it, iterating over components, replacing components with another etc.
-You can see I'm not actually beating it in all areas (I'm much slower in access but much faster in creation and updating), but my ECS looks fast enough for me. What is I'm proud - 0.0B/op for all operations (after initial growth of pools)
-
-my ECS:
-```
-***********************************************
-              create empty world   8.79k (113.79µs) (± 5.56%)   484kB/op          fastest
-          create benchmark world   5.30  (188.75ms) (±12.68%)  1.02GB/op  1658.69× slower
-create and clear benchmark world   4.40  (227.10ms) (± 1.41%)  1.02GB/op  1995.69× slower
-***********************************************
-                   EmptySystem 161.99M (  6.17ns) (± 2.14%)  0.0B/op        fastest
-             EmptyFilterSystem  35.11M ( 28.48ns) (± 1.41%)  0.0B/op   4.61× slower
-SystemAddDeleteSingleComponent  33.49M ( 29.86ns) (± 2.79%)  0.0B/op   4.84× slower
- SystemAddDeleteFourComponents   2.66M (375.95ns) (± 1.04%)  0.0B/op  60.90× slower
-         SystemAskComponent(0) 124.19M (  8.05ns) (± 2.22%)  0.0B/op   1.30× slower
-         SystemAskComponent(1) 124.24M (  8.05ns) (± 2.14%)  0.0B/op   1.30× slower
-         SystemGetComponent(0) 120.09M (  8.33ns) (± 3.09%)  0.0B/op   1.35× slower
-         SystemGetComponent(1)  99.88M ( 10.01ns) (± 3.69%)  0.0B/op   1.62× slower
-   SystemGetSingletonComponent 121.27M (  8.25ns) (± 2.82%)  0.0B/op   1.34× slower
- IterateOverCustomFilterSystem  77.77M ( 12.86ns) (± 2.89%)  0.0B/op   2.08× slower
-***********************************************
-         SystemCountComp1 245.30  (  4.08ms) (± 0.83%)  0.0B/op        fastest
-        SystemUpdateComp1 110.80  (  9.03ms) (± 0.89%)  0.0B/op   2.21× slower
-SystemUpdateComp1UsingPtr 208.47  (  4.80ms) (± 1.06%)  0.0B/op   1.18× slower
-       SystemReplaceComps  32.71  ( 30.58ms) (± 0.79%)  0.0B/op   7.50× slower
-         SystemPassEvents  28.22  ( 35.44ms) (± 0.98%)  0.0B/op   8.69× slower
-***********************************************
-         FullFilterSystem 143.00  (  6.99ms) (± 1.66%)  0.0B/op   1.70× slower
-    FullFilterAnyOfSystem 101.43  (  9.86ms) (± 1.30%)  0.0B/op   2.40× slower
-      SystemComplexFilter 112.97  (  8.85ms) (± 1.49%)  0.0B/op   2.15× slower
-SystemComplexSelectFilter 243.34  (  4.11ms) (± 3.10%)  0.0B/op        fastest
-```
-Entitas.cr (it is slightly outdated so you will have problems to make it work)
-```
-***********************************************
-              create empty world   2.50M (399.61ns) (±16.26%)  1.66kB/op             fastest
-          create benchmark world   1.55  (643.32ms) (±11.33%)  1.57GB/op  1609878.49× slower
-create and clear benchmark world   1.04  (958.39ms) (± 0.87%)  1.67GB/op  2398325.42× slower
-***********************************************
-                   EmptySystem 320.60M (  3.12ns) (± 1.66%)    0.0B/op         fastest
-             EmptyFilterSystem 244.01M (  4.10ns) (± 4.15%)    0.0B/op    1.31× slower
-SystemAddDeleteSingleComponent 537.81k (  1.86µs) (±11.43%)  1.59kB/op  596.13× slower
- SystemAddDeleteFourComponents 487.55k (  2.05µs) (±15.30%)   1.6kB/op  657.57× slower
-         SystemAskComponent(0) 216.22M (  4.63ns) (± 4.59%)    0.0B/op    1.48× slower
-         SystemAskComponent(1) 216.62M (  4.62ns) (± 1.87%)    0.0B/op    1.48× slower
-         SystemGetComponent(0) 217.34M (  4.60ns) (± 4.63%)    0.0B/op    1.48× slower
-         SystemGetComponent(1) 216.66M (  4.62ns) (± 3.60%)    0.0B/op    1.48× slower
-***********************************************
-         SystemCountComp1   8.96k (111.57µs) (± 0.21%)    0.0B/op          fastest
-        SystemUpdateComp1  22.47  ( 44.50ms) (± 0.43%)    0.0B/op   398.85× slower
-SystemUpdateComp1UsingPtr   7.07  (141.54ms) (± 0.99%)    0.0B/op  1268.61× slower
-       SystemReplaceComp1   4.46  (224.01ms) (± 1.19%)  3.81MB/op  2007.79× slower
-***********************************************
-     FullFilterSystem 215.91M (  4.63ns) (± 2.55%)  0.0B/op     1.00× slower
-FullFilterAnyOfSystem 216.47M (  4.62ns) (± 2.01%)  0.0B/op          fastest
-  SystemComplexFilter  39.19k ( 25.52µs) (± 0.31%)  0.0B/op  5524.39× slower
-```
-
+See [Benchmarks](./Benchmarks.md)
 ## Plans
 ### Short-term
 - [x] Reuse entity identifier, allows to replace `@sparse` hash with array
 - [ ] generations of EntityID to catch usage of deleted entities
 - [ ] better API for multiple components - iterating, array, deleting only one
 - [ ] optimally delete multiple components (linked list)
-- [ ] bitmasks for entities. Could they improve performance?
+- [X] bitmasks for entities. Could they improve performance? - no they don't
 - [X] check that all singleframe components are deleted somewhere
-- [ ] benchmark comparison with flecs (https://github.com/jemc/crystal-flecs)
+- [X] benchmark comparison with flecs (https://github.com/jemc/crystal-flecs)
+- [ ] groups from EnTT - could be useful?
 ### Future
 - [ ] Callbacks on adding\deleting components
 - [ ] Work with arena allocator to minimize usage of GC

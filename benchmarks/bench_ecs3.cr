@@ -1,5 +1,5 @@
 require "benchmark"
-require "./src/myecs"
+require "../src/myecs"
 
 record PositionComponent < ECS::Component, x : Float32, y : Float32 do
   def update_x(value)

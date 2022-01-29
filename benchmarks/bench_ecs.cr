@@ -1,5 +1,41 @@
 require "benchmark"
-require "./src/myecs"
+require "../src/myecs"
+
+BASE_LINE =
+  {
+    "create empty world"               => 113.88 * 1000,
+    "create benchmark world"           => 172.70*1000_000,
+    "create and clear benchmark world" => 212.96*1000_000,
+    "EmptySystem"                      => 5.11,
+    "EmptyFilterSystem"                => 26.48,
+    "SystemAddDeleteSingleComponent"   => 25.59,
+    "SystemAddDeleteFourComponents"    => 357.63,
+    "SystemAskComponent(0)"            => 7.99,
+    "SystemAskComponent(1)"            => 7.99,
+    "SystemGetComponent(0)"            => 7.54,
+    "SystemGetComponent(1)"            => 8.65,
+    "SystemGetSingletonComponent"      => 7.91,
+    "IterateOverCustomFilterSystem"    => 12.53,
+    "SystemCountComp1"                 => 3.43 * 1000_000,
+    "SystemUpdateComp1"                => 8.39 * 1000_000,
+    "SystemUpdateComp1UsingPtr"        => 4.19 * 1000_000,
+    "SystemReplaceComps"               => 23.90*1000_000,
+    "SystemPassEvents"                 => 30.42*1000_000,
+    "FullFilterSystem"                 => 6.37*1000_000,
+    "FullFilterAnyOfSystem"            => 8.50*1000_000,
+    "SystemComplexFilter"              => 3.27*1000_000,
+    "SystemComplexSelectFilter"        => 3.37*1000_000,
+  }
+
+module Benchmark
+  module IPS
+    class Entry
+      def human_compare
+        sprintf "%5.2f", BASE_LINE[label] * mean / 1e9
+      end
+    end
+  end
+end
 
 BENCH_COMPONENTS = 100
 
@@ -293,8 +329,8 @@ def init_benchmark_world(n)
 end
 
 BENCH_N      = 1000000
-BENCH_WARMUP =       1
-BENCH_TIME   =       2
+BENCH_WARMUP =       2
+BENCH_TIME   =       5
 
 def benchmark_creation
   puts "***********************************************"
