@@ -3,40 +3,56 @@ I'm comparing it with other ECS with some "realistic" scenario - creating world 
 You can see I'm not actually beating them in all areas (I'm slower in access but much faster in creation), but my ECS looks fast enough for me. What is I'm proud - 0.0B/op for all operations (after initial growth of pools)
 
 ## my ECS:
+Compilation time (in release mode): 
+```
+real    0m30.592s
+user    0m29.234s
+sys     0m1.703s
+```
+Results:
 ```
 ***********************************************
-              create empty world   8.79k (113.79µs) (± 5.56%)   484kB/op          fastest
-          create benchmark world   5.30  (188.75ms) (±12.68%)  1.02GB/op  1658.69× slower
-create and clear benchmark world   4.40  (227.10ms) (± 1.41%)  1.02GB/op  1995.69× slower
+              create empty world   8.34k (119.93µs) (± 5.61%)   484kB/op          fastest
+          create benchmark world   5.68  (176.13ms) (± 8.67%)  1.02GB/op  1468.61× slower
+create and clear benchmark world   4.66  (214.68ms) (± 5.40%)  1.02GB/op  1790.11× slower
 ***********************************************
-                   EmptySystem 161.99M (  6.17ns) (± 2.14%)  0.0B/op        fastest
-             EmptyFilterSystem  35.11M ( 28.48ns) (± 1.41%)  0.0B/op   4.61× slower
-SystemAddDeleteSingleComponent  33.49M ( 29.86ns) (± 2.79%)  0.0B/op   4.84× slower
- SystemAddDeleteFourComponents   2.66M (375.95ns) (± 1.04%)  0.0B/op  60.90× slower
-         SystemAskComponent(0) 124.19M (  8.05ns) (± 2.22%)  0.0B/op   1.30× slower
-         SystemAskComponent(1) 124.24M (  8.05ns) (± 2.14%)  0.0B/op   1.30× slower
-         SystemGetComponent(0) 120.09M (  8.33ns) (± 3.09%)  0.0B/op   1.35× slower
-         SystemGetComponent(1)  99.88M ( 10.01ns) (± 3.69%)  0.0B/op   1.62× slower
-   SystemGetSingletonComponent 121.27M (  8.25ns) (± 2.82%)  0.0B/op   1.34× slower
- IterateOverCustomFilterSystem  77.77M ( 12.86ns) (± 2.89%)  0.0B/op   2.08× slower
+                   EmptySystem 182.15M (  5.49ns) (± 2.51%)  0.0B/op        fastest
+             EmptyFilterSystem  40.55M ( 24.66ns) (± 0.81%)  0.0B/op   4.49× slower
+SystemAddDeleteSingleComponent  37.91M ( 26.38ns) (± 0.77%)  0.0B/op   4.81× slower
+ SystemAddDeleteFourComponents   3.11M (321.07ns) (± 0.47%)  0.0B/op  58.48× slower
+         SystemAskComponent(0) 143.23M (  6.98ns) (± 1.20%)  0.0B/op   1.27× slower
+         SystemAskComponent(1) 139.83M (  7.15ns) (± 1.30%)  0.0B/op   1.30× slower
+         SystemGetComponent(0) 121.21M (  8.25ns) (± 1.28%)  0.0B/op   1.50× slower
+         SystemGetComponent(1) 111.17M (  9.00ns) (± 3.95%)  0.0B/op   1.64× slower
+   SystemGetSingletonComponent 130.97M (  7.64ns) (± 1.19%)  0.0B/op   1.39× slower
+ IterateOverCustomFilterSystem  75.59M ( 13.23ns) (± 1.17%)  0.0B/op   2.41× slower
 ***********************************************
-         SystemCountComp1 245.30  (  4.08ms) (± 0.83%)  0.0B/op        fastest
-        SystemUpdateComp1 110.80  (  9.03ms) (± 0.89%)  0.0B/op   2.21× slower
-SystemUpdateComp1UsingPtr 208.47  (  4.80ms) (± 1.06%)  0.0B/op   1.18× slower
-       SystemReplaceComps  32.71  ( 30.58ms) (± 0.79%)  0.0B/op   7.50× slower
-         SystemPassEvents  28.22  ( 35.44ms) (± 0.98%)  0.0B/op   8.69× slower
+         SystemCountComp1 297.24  (  3.36ms) (± 0.54%)  0.0B/op        fastest
+        SystemUpdateComp1 117.62  (  8.50ms) (± 0.27%)  0.0B/op   2.53× slower
+SystemUpdateComp1UsingPtr 242.48  (  4.12ms) (± 0.33%)  0.0B/op   1.23× slower
+       SystemReplaceComps  41.23  ( 24.25ms) (± 0.14%)  0.0B/op   7.21× slower
+         SystemPassEvents  32.59  ( 30.68ms) (± 0.37%)  0.0B/op   9.12× slower
 ***********************************************
-         FullFilterSystem 143.00  (  6.99ms) (± 1.66%)  0.0B/op   1.70× slower
-    FullFilterAnyOfSystem 101.43  (  9.86ms) (± 1.30%)  0.0B/op   2.40× slower
-      SystemComplexFilter 112.97  (  8.85ms) (± 1.49%)  0.0B/op   2.15× slower
-SystemComplexSelectFilter 243.34  (  4.11ms) (± 3.10%)  0.0B/op        fastest
+         FullFilterSystem 169.08  (  5.91ms) (± 0.21%)  0.0B/op   1.76× slower
+    FullFilterAnyOfSystem 125.96  (  7.94ms) (± 0.21%)  0.0B/op   2.36× slower
+      SystemComplexFilter 297.23  (  3.36ms) (± 2.22%)  0.0B/op        fastest
+SystemComplexSelectFilter 286.01  (  3.50ms) (± 0.81%)  0.0B/op   1.04× slower
 ```
+
 ## Entitas
 https://github.com/spoved/entitas.cr
 
 It worked with 1kk entities, but once added 100 components to the mix it started to crash. So it is benchmarked with half count of entities.
 
 Fast components access (4ns vs 8ns), but slow in creation and updating.
+
+Compilation time:
+```
+real    0m37.578s
+user    0m39.594s
+sys     0m1.891s
+```
+Results:
 ```
 ***********************************************
               create empty world 350.73k (  2.85µs) (±17.52%)  13.0kB/op            fastest
@@ -68,6 +84,14 @@ https://github.com/jemc/crystal-flecs.git
 10x faster at iteration, 5x faster at updating, but other operations are significantly slower as it is archetype-based ecs.
 
 Note that memory usage shows usage only on Crystal bindings side, not allocations inside Flecs itself.
+
+Compilation time:
+```
+real    0m20.507s
+user    0m19.906s
+sys     0m1.109s
+```
+Results:
 ```
               create empty world  81.10  ( 12.33ms) (± 0.78%)   1.0kB/op         fastest
           create benchmark world 287.02m (  3.48s ) (± 0.00%)  10.2MB/op  282.56× slower
