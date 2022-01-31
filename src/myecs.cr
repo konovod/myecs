@@ -1,13 +1,14 @@
 module ECS
+  # :nodoc:
   COMP_INDICES = {} of Component.class => Int32
 
   # Component - container for user data without / with small logic inside.
   # All components should be inherited from `ECS::Component`
-
   abstract struct Component
     macro inherited
-      @[AlwaysInline]
       {% ECS::COMP_INDICES[@type] = ECS::COMP_INDICES.size %}
+
+      @[AlwaysInline]
       def self.component_index
         {{ECS::COMP_INDICES[@type]}}
       end
@@ -104,6 +105,8 @@ module ECS
       @world.gc_entity @id
     end
 
+    # Destroys entity if it is empty. It is done automatically when last component is removed
+    # So the only use case is when you create entity then want to destroy if no components was added to it.
     def destroy_if_empty
       @world.check_gc_entity @id
     end
@@ -430,10 +433,12 @@ module ECS
       io << "World{entities: " << entities_count << "}"
     end
 
+    # total number of alive entities in a world
     def entities_count
       @free_entities.count - @free_entities.remaining
     end
 
+    # number of entities that could exist in a world before reallocation of pools
     def entities_capacity
       @free_entities.count
     end
@@ -467,6 +472,7 @@ module ECS
       @count_components.fill(ENTITY_DELETED)
     end
 
+    # Iterates over all entities
     def each_entity(& : Entity ->)
       entities_capacity.times do |i|
         next if @count_components[i] <= ENTITY_EMPTY
@@ -474,8 +480,8 @@ module ECS
       end
     end
 
-    ENTITY_DELETED = 0u16
-    ENTITY_EMPTY   = 1u16
+    private ENTITY_DELETED = 0u16
+    private ENTITY_EMPTY   = 1u16
 
     @[AlwaysInline]
     protected def inc_count_components(entity_id)
@@ -499,7 +505,7 @@ module ECS
       base_pool_for(typ).total_count > 0
     end
 
-    # Returns simple (stack-allocated) filter that can iterate over single component
+    # Returns SimpleFilter (stack-allocated) that can iterate over single component
     def query(typ)
       SimpleFilter.new(self, typ)
     end
@@ -536,7 +542,7 @@ module ECS
 
       {% for obj in Component.all_subclasses %} 
         @[AlwaysInline]
-        def pool_for(component : {{obj}}) : Pool({{obj}})
+        protected def pool_for(component : {{obj}}) : Pool({{obj}})
           @pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}}))
         end
 
@@ -562,7 +568,7 @@ module ECS
         @pools[typ.component_index]
       end
 
-      # Non-allocating version of `stats`. Yields pairs of component name and count of corresponding components
+      # Non-allocating version of `stats`. Yields component names and count of corresponding components
       # ```
       # world = init_benchmark_world(1000000)
       # world.stats do |comp_name, value| 
@@ -591,11 +597,15 @@ module ECS
     end
   end
 
+  # General filter class, contain methods existing both in `Filter` (fully functional filter) and `SimpleFilter` (simple stack-allocated filter)
   module AbstractFilter
+    # returns true if entity satisfy filter
     abstract def satisfy(entity : Entity) : Bool
+    # iterates over all entities that match the filter
+    # Note that for `MultipleComponents` same entity can be yielded multiple times, once for each component present on entity
     abstract def each_entity(& : Entity ->)
 
-    # Returns entity that match the filter or `nil` if there are no such entities
+    # Returns some entity that match the filter or `nil` if there are no such entities
     def find_entity?
       each_entity do |ent|
         return ent
@@ -604,7 +614,7 @@ module ECS
     end
 
     # Returns number of entities that match the filter.
-    # Note that for `MultipleComponents` single entity can be called multiple times, once for each component present on entity
+    # Note that for `MultipleComponents` single entity will be counted multiple times, once for each component present on entity
     def count_entities
       n = 0
       each_entity do
@@ -614,22 +624,33 @@ module ECS
     end
   end
 
+  # Stack allocated filter - can iterate over one component type.
   struct SimpleFilter
     include AbstractFilter
     @pool : BasePool
 
-    def initialize(@world : World, @typ : ComponentType)
+    # type of components that this filter iterate
+    getter typ : ComponentType
+    # world that owns this filtetr
+    getter world : World
+
+    # Creates SimpleFilter. An easier way is to do `world.query(typ)`
+    def initialize(@world, @typ)
       @pool = @world.base_pool_for(@typ)
     end
 
+    # returns true if entity satisfy filter (contain a component `typ`)
     def satisfy(entity : Entity) : Bool
       entity.has? @typ
     end
 
+    # Returns number of entities that match the filter. (in fact - number of components `typ` in a world)
     def count_entities
       @pool.total_count
     end
 
+    # iterates over all entities containing component `typ`
+    # Note that for `MultipleComponents` same entity can be yielded multiple times, once for each component present on entity
     def each_entity(& : Entity ->)
       @pool.each_entity do |entity|
         yield(Entity.new(@world, entity))
@@ -799,7 +820,7 @@ module ECS
     end
 
     # Calls a block once for each entity that match the filter.
-    # Note that for `MultipleComponents` single entity can be called multiple times, once for each component present on entity
+    # Note that for `MultipleComponents` same entity can be called multiple times, once for each component present on entity
     def each_entity(& : Entity ->)
       smallest_all_count = 0
       smallest_any_count = 0
@@ -879,7 +900,8 @@ module ECS
     end
 
     # Called once during ECS::Systems.init, after #init call.
-    # If this method present, it should return a filter that will be applied to a world
+    # If this method is present, it should return a filter that will be applied to a world
+    # It can also return `nil` that means that no filter is present and #process won't be called
     # Example:
     # ```
     # def filter(world : World)
@@ -896,20 +918,32 @@ module ECS
   end
 
   # This system deletes all components of specified type during execute.
-  # This is a recommended way of deleting `SingleFrame` components.
-  # Example: `systems.add(ECS::RemoveAllOf.new(@world, Component1))`
+  # This is a recommended way of deleting `SingleFrame` components,
+  # as library can detect if such system exists and raise exception if it doesn't.
+  # Example:
+  # ```
+  # systems.add(ECS::RemoveAllOf.new(@world, Component1))`
+  # ```
+  # or use a shortcut:
+  # ```
+  # systems.remove_singleframe(Component1)
+  # ```
+  #
   class RemoveAllOf < System
     @typ : ComponentType
 
+    # creates a system for a given `world` and components of type `typ`
     def initialize(@world, @typ)
       super(@world)
       @world.register_singleframe_deleter(@typ)
     end
 
+    # :nodoc:
     def filter(world)
       @world.of(@typ)
     end
 
+    # :nodoc:
     def process(entity)
       entity.remove(@typ)
     end
@@ -919,12 +953,14 @@ module ECS
   # You can add Systems to Systems to create hierarchy.
   # You can either create Systems directly or (preferred way) inherit from `ECS::Systems` to add systems in `initialize`
   class Systems < System
-    # List of systems in a group. This list shouldn't be modified directly.
+    # List of systems in a group. This list must not be modified directly.
     # Instead, use `#add` to add systems to it and `ECS::System#active` to disable systems
     getter children = [] of System
     @filters = [] of Filter?
     @cur_child : System?
 
+    # creates empty `Systems` group.
+    # This method should be overriden in children to automatically add systems.
     def initialize(@world : World)
       @started = false
     end
@@ -939,16 +975,18 @@ module ECS
       self
     end
 
-    # Creates system and adds it to a group
+    # Creates system of given class and adds it to a group
     def add(sys : System.class)
       add(sys.new(@world))
     end
 
-    # Adds `RemoveAllOf` instance for specified copmonent type
+    # Adds `RemoveAllOf` instance for specified component type
     def remove_singleframe(typ)
       add(ECS::RemoveAllOf.new(@world, typ))
     end
 
+    # calls `init` for all children systems
+    # also initializes filters for children systems
     def init
       raise "#{self.class} already initialized" if @started
       @children.each do |child|
@@ -960,6 +998,7 @@ module ECS
       @started = true
     end
 
+    # calls `execute` and `process` for all active children
     def execute
       raise "#{@children.map(&.class)} wasn't initialized" unless @started
       @world.cur_systems = self
@@ -973,6 +1012,7 @@ module ECS
       @world.cur_systems = nil
     end
 
+    # calls `teardown` for all children systems
     def teardown
       raise "#{self.class} not initialized" unless @started
       @children.each &.teardown
@@ -990,7 +1030,8 @@ module ECS
   end
 end
 
-class LinkedList
+# :nodoc:
+class ECS::LinkedList
   @array : Slice(Int32)
   @root = 0
   getter remaining = 0

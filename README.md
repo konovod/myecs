@@ -5,6 +5,7 @@
 # MyECS
 
 ##### Table of Contents  
+* [Introduction](#introduction)
 * [Main parts of ecs](#main-parts-of-ecs)
   * [Entity](#entity)
   * [Component](#component)
@@ -24,6 +25,61 @@
 * [Benchmarks](#benchmarks)
 * [Plans](#plans)
 * [Contributors](#contributors)
+## Introduction
+
+You can add shard as a dependency to your application's `shard.yml`:
+```yaml
+dependencies:
+  myecs:
+    github: konovod/myecs
+```
+Alternativale, you can just copy file `src/myecs.cr` to your sources as it's single-file library.
+
+Then do 
+```crystal
+require "myecs"
+``` 
+And then use it:
+```crystal
+# declare components
+record Position < ECS::Component, x : Int32, y : Int32
+record Velocity < ECS::Component, vx : Int32, vy : Int32
+
+# declare systems
+class UpdatePositionSystem < ECS::System
+  def filter(world)
+    world.all_of([Position, Velocity])
+  end
+
+  def process(entity)
+    pos = entity.getPosition
+    speed = entity.getVelocity
+    entity.update(Position.new(pos.x + speed.x, pos.y + speed.y))
+  end
+end
+
+# create world
+world = ECS::World.new
+
+# create entities
+5.times { world.new_entity.add(Position.new(10, 10)) }
+10.times do
+  ent = world.new_entity
+  ent.add(Position.new(1, 1))
+  ent.add(Velocity.new(1, 1))
+end
+
+# create systems
+systems = ECS::Systems.new(world)
+systems.add(UpdatePositionSystem)
+
+# run systems
+systems.init
+10.times do
+  systems.execute
+end
+systems.teardown
+```
 
 ## Main parts of ecs
 
