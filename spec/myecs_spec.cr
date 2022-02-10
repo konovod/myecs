@@ -793,4 +793,104 @@ describe ECS::World do
   end
 end
 
+record TestCallbacks < ECS::Component, name : String do
+  class_getter added = [] of String
+  class_getter deleted = [] of String
+
+  def when_added(entity)
+    @@added << @name
+  end
+
+  def when_removed(entity)
+    @@deleted << @name
+  end
+end
+
+@[ECS::MultipleComponents]
+record TestCallbacksMultiple < ECS::Component, name : String do
+  class_getter added = [] of String
+  class_getter deleted = [] of String
+
+  def when_added(entity)
+    @@added << @name
+  end
+
+  def when_removed(entity)
+    @@deleted << @name
+  end
+end
+
+@[ECS::SingleFrame]
+record TestCallbacksSingleFrame < ECS::Component, name : String do
+  class_getter added = [] of String
+  class_getter deleted = [] of String
+
+  def when_added(entity)
+    @@added << @name
+  end
+
+  def when_removed(entity)
+    @@deleted << @name
+  end
+end
+
+describe ECS do
+  describe "callbacks" do
+    it "when_added called when component is added" do
+      world = ECS::World.new
+      TestCallbacks.added.clear
+      world.new_entity.add(Pos.new(1, 1)).add(TestCallbacks.new("first"))
+      world.new_entity.add(TestCallbacks.new("second"))
+      TestCallbacks.added.should eq ["first", "second"]
+    end
+
+    it "when_removed called when component is removed" do
+      world = ECS::World.new
+      TestCallbacks.deleted.clear
+      ent2 = world.new_entity.add(TestCallbacks.new("second"))
+      ent1 = world.new_entity.add(Pos.new(1, 1)).add(TestCallbacks.new("first"))
+      ent1.destroy
+      ent2.remove(TestCallbacks)
+      TestCallbacks.deleted.should eq ["first", "second"]
+    end
+
+    pending "when_removed called when world is cleared" do
+      world = ECS::World.new
+      TestCallbacks.deleted.clear
+      ent1 = world.new_entity.add(Pos.new(1, 1)).add(TestCallbacks.new("first"))
+      ent2 = world.new_entity.add(TestCallbacks.new("second"))
+      world.delete_all
+      TestCallbacks.deleted.should eq ["first", "second"]
+    end
+
+    it "when_added and when_removed works with singleframe components" do
+      world = ECS::World.new
+      TestCallbacksSingleFrame.deleted.clear
+      TestCallbacksSingleFrame.added.clear
+      systems = ECS::Systems.new(world).remove_singleframe(TestCallbacksSingleFrame)
+      systems.init
+      ent1 = world.new_entity.add(Pos.new(1, 1)).add(TestCallbacksSingleFrame.new("first"))
+      ent2 = world.new_entity.add(TestCallbacksSingleFrame.new("second"))
+      systems.execute
+      TestCallbacksSingleFrame.added.should eq ["first", "second"]
+      TestCallbacksSingleFrame.deleted.should eq ["first", "second"]
+    end
+
+    it "when_added and when_removed works with multiple components" do
+      world = ECS::World.new
+      TestCallbacksMultiple.deleted.clear
+      TestCallbacksMultiple.added.clear
+      systems = ECS::Systems.new(world).remove_singleframe(TestCallbacksMultiple)
+      systems.init
+      ent2 = world.new_entity.add(Pos.new(1, 1)).add(TestCallbacksMultiple.new("second"))
+      ent1 = world.new_entity.add(TestCallbacksMultiple.new("first"))
+      ent2.add(TestCallbacksMultiple.new("third"))
+      ent1.destroy
+      ent2.remove(TestCallbacksMultiple)
+      TestCallbacksMultiple.added.should eq ["second", "first", "third"]
+      TestCallbacksMultiple.deleted.should eq ["first", "second", "third"]
+    end
+  end
+end
+
 ECS.debug_stats

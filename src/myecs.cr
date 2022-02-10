@@ -205,13 +205,24 @@ module ECS
 
     def remove_component_without_check_single(entity)
       item = entity_to_id entity
+      comp = @raw[item]
+      if comp.responds_to?(:when_removed)
+        comp.when_removed(Entity.new(@world, entity))
+      end
       @cache_entity = NO_ENTITY if @cache_index == item || @cache_index == @used - 1
       @sparse[entity] = -1
       release_index item
     end
 
     def remove_component_without_check_multiple(entity)
-      # raise "removing multiple components is not supported"
+      (0...@used).each do |i|
+        if @corresponding[i] == entity
+          comp = @raw[i]
+          if comp.responds_to?(:when_removed)
+            comp.when_removed(Entity.new(@world, entity))
+          end
+        end
+      end
       @cache_entity = NO_ENTITY # because many entites are affected
       @sparse[entity] = -1
       # we just iterate over all array
@@ -272,6 +283,10 @@ module ECS
 
     def remove_component(entity, *, dont_gc = false)
       raise "can't remove singleton #{self.class}" if @used == 0
+      item = @raw
+      if item.responds_to?(:when_removed)
+        item.when_removed(Entity.new(@world, entity))
+      end
       @used = 0
     end
 
@@ -293,6 +308,10 @@ module ECS
     def add_component(entity, comp)
       @used = 1
       @raw = comp.as(Component).as(T)
+      item = @raw
+      if item.responds_to?(:when_added)
+        item.when_added(Entity.new(@world, entity))
+      end
     end
 
     def add_or_update_component(entity, comp)
@@ -366,6 +385,9 @@ module ECS
       @cache_entity = entity
       @cache_index = fresh
       @corresponding[fresh] = entity
+      if item.responds_to?(:when_added)
+        item.when_added(Entity.new(@world, entity))
+      end
     end
 
     def update_component(entity, comp)
