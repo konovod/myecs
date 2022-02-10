@@ -215,16 +215,20 @@ module ECS
     end
 
     def remove_component_without_check_multiple(entity)
+      (0...@used).each do |i|
+        if @corresponding[i] == entity
+          comp = @raw[i]
+          if comp.responds_to?(:when_removed)
+            comp.when_removed(Entity.new(@world, entity))
+          end
+        end
+      end
       @cache_entity = NO_ENTITY # because many entites are affected
       @sparse[entity] = -1
       # we just iterate over all array
       # TODO - faster method
       (@used - 1).downto(0) do |i|
         if @corresponding[i] == entity
-          comp = @raw[i]
-          if comp.responds_to?(:when_removed)
-            comp.when_removed(Entity.new(@world, entity))
-          end
           release_index i
         end
       end
@@ -279,6 +283,10 @@ module ECS
 
     def remove_component(entity, *, dont_gc = false)
       raise "can't remove singleton #{self.class}" if @used == 0
+      item = @raw
+      if item.responds_to?(:when_removed)
+        item.when_removed(Entity.new(@world, entity))
+      end
       @used = 0
     end
 
