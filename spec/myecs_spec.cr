@@ -815,6 +815,16 @@ describe ECS do
       world.new_entity.add(TestCallbacks.new("second"))
       TestCallbacks.added.should eq ["first", "second"]
     end
+
+    it "when_removed called when component is removed" do
+      world = ECS::World.new
+      TestCallbacks.deleted.clear
+      ent2 = world.new_entity.add(TestCallbacks.new("second"))
+      ent1 = world.new_entity.add(Pos.new(1, 1)).add(TestCallbacks.new("first"))
+      ent1.destroy
+      ent2.remove(TestCallbacks)
+      TestCallbacks.deleted.should eq ["first", "second"]
+    end
   end
 end
 
