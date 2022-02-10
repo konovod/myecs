@@ -793,4 +793,29 @@ describe ECS::World do
   end
 end
 
+record TestCallbacks < ECS::Component, name : String do
+  class_getter added = [] of String
+  class_getter deleted = [] of String
+
+  def when_added(entity)
+    @@added << @name
+  end
+
+  def when_removed(entity)
+    @@deleted << @name
+  end
+end
+
+describe ECS do
+  describe "callbacks" do
+    it "when_added called when component is added" do
+      world = ECS::World.new
+      TestCallbacks.added.clear
+      world.new_entity.add(Pos.new(1, 1)).add(TestCallbacks.new("first"))
+      world.new_entity.add(TestCallbacks.new("second"))
+      TestCallbacks.added.should eq ["first", "second"]
+    end
+  end
+end
+
 ECS.debug_stats

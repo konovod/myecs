@@ -366,6 +366,9 @@ module ECS
       @cache_entity = entity
       @cache_index = fresh
       @corresponding[fresh] = entity
+      if item.responds_to?(:when_added)
+        item.when_added(Entity.new(@world, entity))
+      end
     end
 
     def update_component(entity, comp)
