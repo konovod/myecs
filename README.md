@@ -21,7 +21,8 @@
 * [Engine integration](#engine-integration)
 * [Other features](#other-features)
   * [Statistics](#statistics)
-  * [component_exists?](#component_exists)
+  * [Iterating without filter](#iterating-without-filter)
+  * [Callbacks](#callbacks)
 * [Benchmarks](#benchmarks)
 * [Plans](#plans)
 * [Contributors](#contributors)
@@ -449,6 +450,18 @@ class FindNearestTarget < ECS::System
 end
 ```
 
+### Callbacks
+If you define `when_added` method, it will be called every time after component was added to entity.
+If you define `when_removed` method, it will be called every time before component is removed from entity (or entity is destroyed).
+```crystal
+record PhysicalBody < ECS::Component, raw : PhysEngine::Body do
+  def when_removed(entity)
+    raw.destroy
+  end
+end
+```
+This correctly process SingleFrame, Multiple and Singleton components. 
+The only limitation is that currently `world.delete_all` won't call `when_removed` (this would hurt performance), so use a specialized filter (or query) to delete all components in that case.
 ## Benchmarks
 See [Benchmarks](./Benchmarks.md)
 ## Plans
@@ -461,8 +474,9 @@ See [Benchmarks](./Benchmarks.md)
 - [X] check that all singleframe components are deleted somewhere
 - [X] benchmark comparison with flecs (https://github.com/jemc/crystal-flecs)
 - [ ] groups from EnTT - could be useful?
+- [ ] Serialization 
 ### Future
-- [ ] Callbacks on adding\deleting components
+- [X] Callbacks on adding\deleting components
 - [ ] Work with arena allocator to minimize usage of GC
 ## Contributors
 - [Andrey Konovod](https://github.com/konovod) - creator and maintainer
