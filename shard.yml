@@ -9,5 +9,6 @@ crystal: 1.2.0
 dependencies:
   cannon:
     github: konovod/cannon
+    branch: master
     
 license: MIT
