@@ -441,6 +441,7 @@ module ECS
 
     def encode(io)
       Cannon.encode(io, @used)
+      Cannon.encode(io, @size)
       Cannon.encode(io, @corresponding[0...@used])
       Cannon.encode(io, @sparse)
       @used.times do |i|
@@ -450,7 +451,7 @@ module ECS
 
     def decode(io)
       @used = Cannon.decode(io, typeof(@used))
-      @size = @used
+      @size = Cannon.decode(io, typeof(@size))
       @corresponding = Cannon.decode(io, typeof(@corresponding))
       @sparse = Cannon.decode(io, typeof(@sparse))
       @raw = Pointer(T).malloc(@size).to_slice(@size)
