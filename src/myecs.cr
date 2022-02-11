@@ -437,8 +437,6 @@ module ECS
       base_pool_for(typ).deleter_registered = true
     end
 
-    protected property cur_systems : Systems? # TODO - TLS
-
     # Creates new `Filter` and adds a condition to it
     delegate of, all_of, any_of, exclude, to: new_filter
 
@@ -1023,7 +1021,6 @@ module ECS
     # calls `execute` and `process` for all active children
     def execute
       raise "#{@children.map(&.class)} wasn't initialized" unless @started
-      @world.cur_systems = self
       @children.zip(@filters) do |sys, filter|
         @cur_child = sys
         if filter && sys.active
@@ -1031,7 +1028,6 @@ module ECS
         end
         sys.do_execute
       end
-      @world.cur_systems = nil
     end
 
     # calls `teardown` for all children systems
