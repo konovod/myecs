@@ -1,10 +1,15 @@
+require "cannon"
+
 module ECS
   # :nodoc:
   COMP_INDICES = {} of Component.class => Int32
 
   # Component - container for user data without / with small logic inside.
   # All components should be inherited from `ECS::Component`
+  @[Packed]
   abstract struct Component
+    include Cannon::Auto
+
     macro inherited
       {% ECS::COMP_INDICES[@type] = ECS::COMP_INDICES.size %}
 
@@ -327,6 +332,16 @@ module ECS
       return nil if @used == 0
       @raw
     end
+
+    def encode(io)
+      Cannon.encode(io, @used)
+      Cannon.encode(io, @raw)
+    end
+
+    def decode(io)
+      @used = Cannon.decode(io, typeof(@used))
+      @raw = Cannon.decode(io, typeof(@raw))
+    end
   end
 
   private class NormalPool(T) < Pool(T)
@@ -422,6 +437,26 @@ module ECS
     def get_component?(entity)
       return nil unless has_component?(entity)
       pointer[entity_to_id entity]
+    end
+
+    def encode(io)
+      Cannon.encode(io, @used)
+      Cannon.encode(io, @corresponding[0...@used])
+      Cannon.encode(io, @sparse)
+      @used.times do |i|
+        Cannon.encode(io, @raw[i])
+      end
+    end
+
+    def decode(io)
+      @used = Cannon.decode(io, typeof(@used))
+      @size = @used
+      @corresponding = Cannon.decode(io, typeof(@corresponding))
+      @sparse = Cannon.decode(io, typeof(@sparse))
+      @raw = Pointer(T).malloc(@size).to_slice(@size)
+      @used.times do |i|
+        @raw[i] = Cannon.decode(io, T)
+      end
     end
   end
 
@@ -614,6 +649,21 @@ module ECS
         end
         result
       end
+    end
+
+    # @free_entities = LinkedList.new(DEFAULT_ENTITY_POOL_SIZE)
+    # protected getter count_components = Slice(UInt16).new(DEFAULT_ENTITY_POOL_SIZE)
+    # protected getter pools = Array(BasePool).new({{Component.all_subclasses.size}})
+    def encode(io)
+      Cannon.encode(io, @free_entities)
+      Cannon.encode(io, @count_components)
+      @pools.each &.encode(io)
+    end
+
+    def decode(io)
+      @free_entities = Cannon.decode(io, typeof(@free_entities))
+      @count_components = Cannon.decode(io, typeof(@count_components))
+      @pools.each &.decode(io)
     end
   end
 
@@ -1050,10 +1100,14 @@ end
 
 # :nodoc:
 class ECS::LinkedList
+  include Cannon::Auto
   @array : Slice(Int32)
   @root = 0
   getter remaining = 0
   getter count = 0
+
+  protected def initialize(@array, @root, @remaining, @count)
+  end
 
   def initialize(@count : Int32)
     @remaining = @count

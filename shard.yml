@@ -6,4 +6,8 @@ authors:
 
 crystal: 1.2.0
 
+dependencies:
+  cannon:
+    github: konovod/cannon
+    
 license: MIT

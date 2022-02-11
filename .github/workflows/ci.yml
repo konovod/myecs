@@ -23,4 +23,5 @@ jobs:
         with:
           crystal: ${{matrix.crystal}}
       - uses: actions/checkout@v2
+      - run: shards install
       - run: crystal spec
