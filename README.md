@@ -461,7 +461,8 @@ record PhysicalBody < ECS::Component, raw : PhysEngine::Body do
 end
 ```
 This correctly process SingleFrame, Multiple and Singleton components. 
-The only limitation is that currently `world.delete_all` won't call `when_removed` (this would hurt performance), so use a specialized filter (or query) to delete all components in that case.
+Note that by default `world.delete_all` won't call `when_removed` for performance purposes (and because it doesn't make sense in many cases).
+Use `world.delete_all(with_callbacks: true)` if you need to still call `when_removed` for all components or use specialized filter to delete selected components and then destroy all.
 ## Benchmarks
 See [Benchmarks](./Benchmarks.md)
 ## Plans
@@ -474,9 +475,11 @@ See [Benchmarks](./Benchmarks.md)
 - [X] check that all singleframe components are deleted somewhere
 - [X] benchmark comparison with flecs (https://github.com/jemc/crystal-flecs)
 - [ ] groups from EnTT - could be useful?
-- [ ] Serialization 
+- [ ] Serialization
+- [ ] Different contexts to simplify usage of different worlds
 ### Future
 - [X] Callbacks on adding\deleting components
+  - [X] Option to call deletion callbacks when clearing world
 - [ ] Work with arena allocator to minimize usage of GC
 ## Contributors
 - [Andrey Konovod](https://github.com/konovod) - creator and maintainer

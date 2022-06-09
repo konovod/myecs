@@ -27,10 +27,8 @@ module ECS
   annotation MultipleComponents
   end
 
-  private DEFAULT_COMPONENT_POOL_SIZE   =   16
-  private DEFAULT_EVENT_POOL_SIZE       =   16
-  private DEFAULT_EVENT_TOTAL_POOL_SIZE =   16
-  private DEFAULT_ENTITY_POOL_SIZE      = 1024
+  private SMALL_COMPONENT_POOL_SIZE =   16
+  private DEFAULT_ENTITY_POOL_SIZE  = 1024
 
   # Entity Identifier
   alias EntityID = UInt32
@@ -161,7 +159,14 @@ module ECS
 
     protected def grow
       old_size = @size
-      @size = @size * 2
+      @size = case old_size
+              when 0
+                1
+              when 1
+                SMALL_COMPONENT_POOL_SIZE
+              else
+                @size * 2
+              end
       @raw = @raw.to_unsafe.realloc(@size).to_slice(@size)
       @corresponding = @corresponding.to_unsafe.realloc(@size).to_slice(@size)
     end
@@ -246,7 +251,7 @@ module ECS
       end
     end
 
-    def clear
+    def clear(with_callbacks = false)
       @sparse.fill(-1)
       @used = 0
       @cache_entity = NO_ENTITY
@@ -296,7 +301,13 @@ module ECS
     def each_entity(& : EntityID ->)
     end
 
-    def clear
+    def clear(with_callbacks = false)
+      if @used > 0 && @raw.responds_to?(:when_removed)
+        item = @raw
+        if item.responds_to?(:when_removed)
+          item.when_removed(Entity.new(@world, NO_ENTITY))
+        end
+      end
       @used = 0
     end
 
@@ -315,8 +326,14 @@ module ECS
     end
 
     def add_or_update_component(entity, comp)
+      was_empty = @used == 0
       @used = 1
       @raw = comp.as(Component).as(T)
+      if was_empty
+        if comp.responds_to?(:when_added)
+          comp.when_added(Entity.new(@world, entity))
+        end
+      end
     end
 
     def get_component_ptr(entity)
@@ -333,10 +350,7 @@ module ECS
     @raw : Slice(T)
 
     def initialize(@world : World)
-      size = DEFAULT_COMPONENT_POOL_SIZE
-      {% if T.annotation(ECS::SingleFrame) %}
-        size = DEFAULT_EVENT_POOL_SIZE
-      {% end %}
+      size = 0
       super(size, @world)
       @raw = Pointer(T).malloc(@size).to_slice(@size)
     end
@@ -423,6 +437,18 @@ module ECS
       return nil unless has_component?(entity)
       pointer[entity_to_id entity]
     end
+
+    def clear(with_callbacks = false)
+      if with_callbacks && @used > 0 && @raw[0].responds_to?(:when_removed)
+        @used.times do |i|
+          item = @raw[i]
+          if item.responds_to?(:when_removed)
+            item.when_removed(Entity.new(@world, @corresponding[i]))
+          end
+        end
+      end
+      super
+    end
   end
 
   # Root level container for all entities / components, is iterated with `ECS::Systems`
@@ -486,9 +512,9 @@ module ECS
     end
 
     # Deletes all components and entities from the world
-    def delete_all
+    def delete_all(with_callbacks = false)
+      @pools.each &.clear(with_callbacks)
       @free_entities.clear
-      @pools.each &.clear
       @count_components.fill(ENTITY_DELETED)
     end
 
