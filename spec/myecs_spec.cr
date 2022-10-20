@@ -950,7 +950,20 @@ describe ECS::World do
     puts "serialization size: #{total_size}"
   end
 
-  pending "isn't broken after deserialization" do
+  it "isn't broken after deserialization (minimal test)" do
+    world = ECS::World.new
+    io = IO::Memory.new
+    16.times { ent = world.new_entity.add(Pos.new(1, 1)) }
+    world.encode io
+
+    world2 = ECS::World.new
+    io.rewind
+    world2.decode io
+
+    world2.new_entity.add(Pos.new(1, 1))
+  end
+
+  it "isn't broken after deserialization" do
     world = ECS::World.new
     io = IO::Memory.new
     100.times do

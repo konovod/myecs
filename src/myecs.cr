@@ -456,8 +456,10 @@ module ECS
     def encode(io)
       Cannon.encode(io, @used)
       Cannon.encode(io, @size)
-      Cannon.encode(io, @corresponding[0...@used])
       Cannon.encode(io, @sparse)
+      @used.times do |i|
+        Cannon.encode(io, @corresponding[i])
+      end
       @used.times do |i|
         Cannon.encode(io, @raw[i])
       end
@@ -466,12 +468,17 @@ module ECS
     def decode(io)
       @used = Cannon.decode(io, typeof(@used))
       @size = Cannon.decode(io, typeof(@size))
-      @corresponding = Cannon.decode(io, typeof(@corresponding))
       @sparse = Cannon.decode(io, typeof(@sparse))
+      @corresponding = Pointer(EntityID).malloc(@size).to_slice(@size)
+      @used.times do |i|
+        @corresponding[i] = Cannon.decode(io, EntityID)
+      end
       @raw = Pointer(T).malloc(@size).to_slice(@size)
       @used.times do |i|
         @raw[i] = Cannon.decode(io, T)
       end
+      @cache_entity = NO_ENTITY
+      @cache_index = -1
     end
 
     def clear(with_callbacks = false)
