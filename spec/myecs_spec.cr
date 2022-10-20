@@ -108,7 +108,7 @@ describe ECS do
     ent.set(Pos.new(2, 2))
     ent.has?(Pos).should be_true
     ent.getPos.should eq Pos.new(2, 2)
-    count_entities(world.of(Pos)).should eq 1
+    world.of(Pos).size.should eq 1
   end
 
   it "receive component pointer" do
@@ -153,12 +153,12 @@ describe ECS do
     ent2 = world.new_entity
     ent.add(Pos.new(1, 1))
     filter = world.of(Speed)
-    count_entities(filter).should eq 0
+    filter.size.should eq 0
     ent2.add(Speed.new(1, 1))
-    count_entities(filter).should eq 1
+    filter.size.should eq 1
     ent2.add(Pos.new(1, 1))
     ent2.remove(Speed)
-    count_entities(filter).should eq 0
+    filter.size.should eq 0
   end
 
   it "can iterate using filters with all_of" do
@@ -167,31 +167,31 @@ describe ECS do
     ent2 = world.new_entity
     ent.add(Pos.new(1, 1))
     ent2.add(Pos.new(1, 1))
-    count_entities(world.all_of([Pos, Speed])).should eq 0
+    world.all_of([Pos, Speed]).size.should eq 0
     ent2.add(Speed.new(1, 1))
-    count_entities(world.all_of([Pos, Speed])).should eq 1
-    count_entities(world.all_of([Pos])).should eq 2
-    count_entities(world.all_of([Pos, Name])).should eq 0
-    count_entities(world.all_of([Name])).should eq 0
+    world.all_of([Pos, Speed]).size.should eq 1
+    world.all_of([Pos]).size.should eq 2
+    world.all_of([Pos, Name]).size.should eq 0
+    world.all_of([Name]).size.should eq 0
   end
   it "can iterate using filters with any_of" do
     world = ECS::World.new
     world.new_entity.add(Pos.new(1, 1))
-    count_entities(world.any_of([Name, Speed])).should eq 0
+    world.any_of([Name, Speed]).size.should eq 0
     world.new_entity.add(Pos.new(1, 1)).add(Speed.new(1, 1))
     world.new_entity.add(Speed.new(1, 1))
-    count_entities(world.any_of([Pos, Speed])).should eq 3
-    count_entities(world.any_of([Name, Pos])).should eq 2
+    world.any_of([Pos, Speed]).size.should eq 3
+    world.any_of([Name, Pos]).size.should eq 2
   end
 
   it "any_of works with single item" do
     world = ECS::World.new
     world.new_entity.add(Pos.new(1, 1))
-    count_entities(world.any_of([Pos])).should eq 1
+    world.any_of([Pos]).size.should eq 1
     world.new_entity.add(Pos.new(1, 1)).add(Speed.new(1, 1))
     world.new_entity.add(Speed.new(1, 1))
-    count_entities(world.any_of([Pos])).should eq 2
-    count_entities(world.any_of([Name])).should eq 0
+    world.any_of([Pos]).size.should eq 2
+    world.any_of([Name]).size.should eq 0
   end
 
   it "can filter using exclude" do
@@ -199,27 +199,27 @@ describe ECS do
     world.new_entity.add(Pos.new(1, 1))
     world.new_entity.add(Pos.new(1, 1)).add(Speed.new(1, 1))
     world.new_entity.add(Speed.new(1, 1))
-    count_entities(world.of(Pos).exclude(Speed)).should eq 1
-    count_entities(world.exclude([Speed])).should eq 1
-    count_entities(world.exclude(Name)).should eq 3
-    count_entities(world.exclude([Name, Pos])).should eq 1
+    world.of(Pos).exclude(Speed).size.should eq 1
+    world.exclude([Speed]).size.should eq 1
+    world.exclude(Name).size.should eq 3
+    world.exclude([Name, Pos]).size.should eq 1
   end
   it "can filter using select" do
     world = ECS::World.new
     world.new_entity.add(Pos.new(1, 1))
     world.new_entity.add(Pos.new(1, -1)).add(Speed.new(1, 1))
     world.new_entity.add(Speed.new(1, 2))
-    count_entities(world.of(Pos).select { |ent| ent.getPos.y > 0 }).should eq 1
-    expect_raises(Exception) { count_entities(world.new_filter.select { |ent| ent.getPos.y > 0 }) }
+    world.of(Pos).select { |ent| ent.getPos.y > 0 }.size.should eq 1
+    expect_raises(Exception) { world.new_filter.select { |ent| ent.getPos.y > 0 }.size }
   end
 
   it "can found single entity" do
     world = ECS::World.new
-    world.of(Pos).find_entity?.should eq nil
+    world.of(Pos).first?.should eq nil
     ent = world.new_entity.add(Pos.new(1, 1))
-    world.of(Pos).find_entity?.should eq ent
+    world.of(Pos).first?.should eq ent
     ent.destroy
-    world.of(Pos).find_entity?.should eq nil
+    world.of(Pos).first?.should eq nil
   end
 
   it "can add component of runtime type" do
@@ -227,7 +227,7 @@ describe ECS do
     ent = world.new_entity
     event = rand < 0.5 ? Pos.new(1, 1) : Speed.new(2, 2)
     ent.add(event)
-    world.any_of([Pos, Speed]).find_entity?.should eq ent
+    world.any_of([Pos, Speed]).first?.should eq ent
   end
 end
 
@@ -404,28 +404,28 @@ describe ECS::SingleFrame do
     expect_raises(Exception) { world.new_entity.add(TestEvent1.new) }
     systems.remove_singleframe(TestEvent1)
     world.new_entity.add(TestEvent1.new)
-    count_entities(world.of(TestEvent1)).should eq 1
+    world.of(TestEvent1).size.should eq 1
     systems.execute
-    count_entities(world.of(TestEvent1)).should eq 0
+    world.of(TestEvent1).size.should eq 0
   end
   it "isn't checked that they are deleted somewhere if annotation specify it" do
     world = ECS::World.new
     systems = ECS::Systems.new(world)
     systems.init
-    count_entities(world.of(TestEventNotChecked)).should eq 0
+    world.of(TestEventNotChecked).size.should eq 0
     world.new_entity.add(TestEventNotChecked.new)
-    count_entities(world.of(TestEventNotChecked)).should eq 1
+    world.of(TestEventNotChecked).size.should eq 1
     systems.execute
-    count_entities(world.of(TestEventNotChecked)).should eq 1
+    world.of(TestEventNotChecked).size.should eq 1
     world.new_entity.add(TestEventNotChecked.new)
-    count_entities(world.of(TestEventNotChecked)).should eq 2
+    world.of(TestEventNotChecked).size.should eq 2
   end
 end
 
-@[ECS::SingletonComponent]
+@[ECS::Singleton]
 record Config < ECS::Component, value : Int32
 
-describe ECS::SingletonComponent do
+describe ECS::Singleton do
   it "exists on every entity" do
     world = ECS::World.new
     ent = world.new_entity.add(Pos.new(1, 1))
@@ -451,7 +451,7 @@ describe ECS::SingletonComponent do
     ent.add(Speed.new(10, 10))
     world.new_entity.add(Config.new(100))
     count_entities(world).should eq 1
-    count_entities(world.of(Config)).should eq 0
+    world.of(Config).size.should eq 0
   end
 
   it "can be acquired from a world" do
@@ -504,10 +504,10 @@ describe ECS do
   end
 end
 
-@[ECS::MultipleComponents]
+@[ECS::Multiple]
 record Changer < ECS::Component, dx : Int32, dy : Int32
 
-@[ECS::MultipleComponents]
+@[ECS::Multiple]
 @[ECS::SingleFrame]
 record Request < ECS::Component, dx : Int32, dy : Int32
 
@@ -548,7 +548,7 @@ class GenerateRequests < ECS::System
   end
 end
 
-describe ECS::MultipleComponents do
+describe ECS::Multiple do
   it "can be added" do
     world = ECS::World.new
     ent = world.new_entity
@@ -579,8 +579,8 @@ describe ECS::MultipleComponents do
     ent.add(Pos.new(0, 0))
     ent.add(Changer.new(1, 1))
     ent.add(Changer.new(2, 2))
-    count_entities(world.of(Changer)).should eq 2
-    count_entities(world.of(Pos)).should eq 1
+    world.of(Changer).size.should eq 2
+    world.of(Pos).size.should eq 1
   end
 
   it "can be iterated after removal" do
@@ -589,9 +589,9 @@ describe ECS::MultipleComponents do
     ent.add(Pos.new(0, 0))
     ent.add(Changer.new(1, 1))
     ent.add(Changer.new(2, 2))
-    count_entities(world.of(Changer)).should eq 2
+    world.of(Changer).size.should eq 2
     ent.remove(Changer)
-    count_entities(world.of(Changer)).should eq 0
+    world.of(Changer).size.should eq 0
   end
 
   it "can be iterated in combination with usual components" do
@@ -604,10 +604,10 @@ describe ECS::MultipleComponents do
     ent.add(Changer.new(3, 3))
     ent = world.new_entity
     ent.add(Changer.new(4, 4))
-    count_entities(world.any_of([Changer, Pos])).should eq 4
-    count_entities(world.any_of([Pos, Changer])).should eq 4
-    count_entities(world.all_of([Changer, Pos])).should eq 2
-    count_entities(world.all_of([Pos, Changer])).should eq 2
+    world.any_of([Changer, Pos]).size.should eq 4
+    world.any_of([Pos, Changer]).size.should eq 4
+    world.all_of([Changer, Pos]).size.should eq 2
+    world.all_of([Pos, Changer]).size.should eq 2
   end
 
   it "can be iterated in combination with usual components #2" do
@@ -623,7 +623,7 @@ describe ECS::MultipleComponents do
     ent = world.new_entity
     ent.add(Changer.new(4, 4))
     ent.add(Speed.new(0, 0))
-    count_entities(world.of(Speed).any_of([Pos, Changer])).should eq 4
+    world.of(Speed).any_of([Pos, Changer]).size.should eq 4
   end
 
   it "can't be iterated when several of them present in filter" do
@@ -632,7 +632,7 @@ describe ECS::MultipleComponents do
     expect_raises(Exception) { world.all_of([Changer, Request]) }
     expect_raises(Exception) { world.of(Changer).of(Request) }
     expect_raises(Exception) { world.any_of([Changer, Pos]).any_of([Request, Speed]) }
-    count_entities(world.of(Changer).exclude(Request)).should eq 0
+    world.of(Changer).exclude(Request).size.should eq 0
   end
 
   it "can be processed with systems" do
@@ -707,10 +707,10 @@ describe ECS do
     ent3 = world.new_entity
     ent3.add(Pos.new(3, 3))
     ent3.add(Speed.new(0, 0))
-    count_entities(world.of(Speed)).should eq 3
+    world.of(Speed).size.should eq 3
     ent1.remove(Pos)
     ent3.remove(Pos)
-    world.of(Pos).find_entity?.not_nil!.getPos.should eq Pos.new(2, 2)
+    world.of(Pos).first?.not_nil!.getPos.should eq Pos.new(2, 2)
   end
 end
 
@@ -726,12 +726,12 @@ describe ECS::World do
 
   it "can iterate on a single component without filter" do
     world = ECS::World.new
-    count_entities(world.query(Pos)).should eq 0
+    world.query(Pos).size.should eq 0
     ent = world.new_entity.add(Pos.new(1, 1))
     world.new_entity.add(Pos.new(2, 2))
-    count_entities(world.query(Pos)).should eq 2
+    world.query(Pos).size.should eq 2
     ent.destroy
-    count_entities(world.query(Pos)).should eq 1
+    world.query(Pos).size.should eq 1
   end
 
   it "can show stats" do
@@ -755,7 +755,7 @@ describe ECS::World do
     world.new_entity.add(Pos.new(1, 1))
     world.new_entity.add(Pos.new(2, 2))
     iter = 0
-    world.of(Pos).each_entity do |ent|
+    world.of(Pos).each do |ent|
       pos = ent.getPos
       world.new_entity.add(pos) if world.entities_count < 5
       iter += 1
@@ -768,7 +768,7 @@ describe ECS::World do
     world.new_entity.add(Pos.new(1, 1))
     world.new_entity.add(Pos.new(2, 2))
     iter = 0
-    world.of(Pos).each_entity do |ent|
+    world.of(Pos).each do |ent|
       pos = ent.getPos
       ent.remove(Pos)
       world.new_entity.add(pos)
@@ -782,7 +782,7 @@ describe ECS::World do
     world.new_entity.add(Pos.new(1, 1))
     world.new_entity.add(Pos.new(2, 2))
     iter = 0
-    world.of(Pos).each_entity do |ent|
+    world.of(Pos).each do |ent|
       pos = ent.getPos
       ent.replace(Pos, Speed.new(pos.x, pos.y))
       speed = ent.getSpeed
@@ -806,7 +806,7 @@ record TestCallbacks < ECS::Component, name : String do
   end
 end
 
-@[ECS::MultipleComponents]
+@[ECS::Multiple]
 record TestCallbacksMultiple < ECS::Component, name : String do
   class_getter added = [] of String
   class_getter deleted = [] of String
@@ -907,7 +907,7 @@ describe ECS::World do
     ent2 = world.new_entity.add(Pos.new(2, 2)).add(Speed.new(3, 3))
     world.encode io
     puts io.pos, world.stats
-    world.query(Pos).each_entity do |ent|
+    world.query(Pos).each do |ent|
       pp! ent.getPos?, ent.getSpeed?, ent.getName?
     end
     puts "~~~~~~"
@@ -915,7 +915,7 @@ describe ECS::World do
     io.rewind
     world2.decode io
     puts io.pos, world.stats
-    world.query(Pos).each_entity do |ent|
+    world.query(Pos).each do |ent|
       pp! ent.getPos?, ent.getSpeed?, ent.getName?
     end
   end

@@ -59,7 +59,7 @@ record TestEvent1 < ECS::Component
 record TestEvent2 < ECS::Component
 @[ECS::SingleFrame]
 record TestEvent3 < ECS::Component
-@[ECS::SingletonComponent]
+@[ECS::Singleton]
 record Config < ECS::Component, values : Hash(String, Int32)
 
 class EmptySystem < ECS::System
