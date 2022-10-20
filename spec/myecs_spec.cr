@@ -899,4 +899,26 @@ describe ECS do
   end
 end
 
+describe ECS::World do
+  it "can be serialized and deserialized" do
+    world = ECS::World.new
+    io = IO::Memory.new
+    ent1 = world.new_entity.add(Pos.new(1, 1)).add(Name.new("first"))
+    ent2 = world.new_entity.add(Pos.new(2, 2)).add(Speed.new(3, 3))
+    world.encode io
+    puts io.pos, world.stats
+    world.query(Pos).each_entity do |ent|
+      pp! ent.getPos?, ent.getSpeed?, ent.getName?
+    end
+    puts "~~~~~~"
+    world2 = ECS::World.new
+    io.rewind
+    world2.decode io
+    puts io.pos, world.stats
+    world.query(Pos).each_entity do |ent|
+      pp! ent.getPos?, ent.getSpeed?, ent.getName?
+    end
+  end
+end
+
 ECS.debug_stats
