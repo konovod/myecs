@@ -1007,4 +1007,17 @@ describe ECS::World do
   end
 end
 
+it "singleton correctly serialized" do
+  world = ECS::World.new
+  io = IO::Memory.new
+  16.times { ent = world.new_entity.add(Pos.new(1, 1)) }
+  world.new_entity.add(Config.new(101))
+  world.encode io
+
+  world2 = ECS::World.new
+  io.rewind
+  world2.decode io
+  world2.getConfig.value.should eq 101
+end
+
 ECS.debug_stats
