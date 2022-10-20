@@ -12,8 +12,8 @@
   * [System](#system)
 * [Special components](#special-components)
   * [ECS::SingleFrame](#ecssingleframe)
-  * [ECS::MultipleComponents](#ecsmultiplecomponents)
-  * [ECS::SingletonComponent](#ecssingletoncomponent)
+  * [ECS::Multiple](#ecsmultiple)
+  * [ECS::Singleton](#ecssingleton)
 * [Other classes](#other-classes)
   * [ECS::World](#ecsworld)
   * [ECS::Filter](#ecsfilter)
@@ -189,7 +189,7 @@ annotation `@[ECS::SingleFrame]` is for components that have to live 1 frame (us
 ```crystal
 require "./src/myecs"
 
-@[ECS::MultipleComponents]
+@[ECS::Multiple]
 @[ECS::SingleFrame]
 record SomeRequest < ECS::Component, data : String
 
@@ -239,15 +239,15 @@ systems = ECS::Systems.new(world)
 world.new_entity.add(SomeEvent.new) # this won't raise
 ```
 
-#### ECS::MultipleComponents
-Note above example also shows the use of `@[ECS::MultipleComponents]`. This is for components that can be added multiple times. They have some limitations though - filters can't iterate over several of components with this annotation (as this would usually mean cartesian product, unlikely needed in practice), there is no way to get multiple components outside of filter (it is planned though, but it won't be efficient nor cache-friendly), `delete` deletes all of components on target entity and there is no way to delete only one.
-`ECS::MultipleComponents` can be combined with `ECS::SingleFrame` but that's not a requirement - there are perfectly correct use cases for `ECS::MultipleComponents` on persistent components - add several sprites to one renderable object or add several weapons to a tank. The only thing is that with current API you won't be able to remove single weapon ion that case - only remove all of them. So if you need better control over components just use good old "add an entity with single component and link it to parent entity" approach.
+#### ECS::Multiple
+Note above example also shows the use of `@[ECS::Multiple]`. This is for components that can be added multiple times. They have some limitations though - filters can't iterate over more then on type of components with this annotation (as this would usually mean cartesian product, unlikely needed in practice), there is no way to get multiple components outside of filter (it is planned though, but it won't be efficient nor cache-friendly), `delete` deletes all of components on target entity and there is no way to delete only one.
+`ECS::Multiple` can be combined with `ECS::SingleFrame` but that's not a requirement - there are perfectly correct use cases for `ECS::Multiple` on persistent components - add several sprites to one renderable object or add several weapons to a tank. The only thing is that with current API you won't be able to remove single weapon in that case - only remove all of them. So if you need better control over components just use good old "add an entity with single component and link it to parent entity" approach.
 
-#### ECS::SingletonComponent
-annotation `@[ECS::SingletonComponent]` is for data sharing. It creates component that is considered present on every entity (iteration on it isn't possible though). So you can do
+#### ECS::Singleton
+annotation `@[ECS::Singleton]` is for data sharing. It creates component that is considered present on every entity (iteration on it isn't possible though). So you can do
 
 ```crystal
-@[ECS::SingletonComponent]
+@[ECS::Singleton]
 record Config < ECS::Component, values : Hash(String, Int32)
 
 class InitConfigSystem < ECS::System
@@ -277,8 +277,11 @@ world = ECS::World.new
 # you can delete all entities
 world.delete_all
 
+# also delete all entities, but calls `when_removed` callbacks (slower)
+delete_all(with_callbacks: true)
+
 # you can create entity
-world.new_entity
+entity = world.new_entity
 
 # you can iterate all entities
 world.each_entity do |entity|
@@ -298,10 +301,13 @@ Filters that is possible:
   - `all_of([Comp1, Comp2])`: all of the components must be present on entity
   - `of(Comp1)`: alias for `all_of([Comp1])`
   - `exclude([Comp1])`: none of the components could be present on entity
-  - `select{|ent| some_check(ent) }`: user-provided filter procedure, that must return true for entity to be passed.
+  - `filter{|ent| some_check(ent) }`: user-provided filter procedure, that must return true for entity to be passed.
 
 All of them can be called 0, 1, or many times using method chaining. 
 So `any_of([Comp1, Comp2]).any_of([Comp3, Comp4])` means that either Comp1 or Comp2 should be present AND either Comp3 or Comp4 should be present.
+
+`ECS::Filter` includes `Enumerable(Entity)`, so you can use methods like `#any?` or `#count`. 
+Note that `#select` in `Enumerable` returns an array, not a `ECS::Filter`. To create a filter use `#filter` method.
 
 #### ECS::Systems
 Group of systems to process `EcsWorld` instance:
@@ -425,6 +431,7 @@ end
 Sometimes you just need to check if some component is present in a world. No need to create a filter for it - just use `world.component_exists?(SomeComponent)`
 
 You can also iterate over single component without creating Filter using `world.query`.
+It returns a lightweight `SimpleFilter` instance, that includes `Enumerable(Entity)`.
 This could be useful when iterating inside `System#process`:
 ```crystal
 class FindNearestTarget < ECS::System
@@ -436,9 +443,9 @@ class FindNearestTarget < ECS::System
     pos = entity.getPos
     nearest = Nil
     nearest_range = INFINITY
-    # world.of(IsATarget) will allocate a Filter, so you should create it at initialize and store it
+    # world.of(IsATarget) will allocate a Filter, so you should create it at `initialize` and store it somewhere
     # so here is an easier way:
-    world.query(IsATarget).each_entity do |target|
+    world.query(IsATarget).each do |target|
       range = distance(target.getPos, pos)
       if nearest_range > range
         nearest = target
@@ -446,6 +453,8 @@ class FindNearestTarget < ECS::System
       end
     end
     # ...
+    # You can also use Enumerable utility methods:
+    nearest = world.query(IsATarget).min_by { |target| distance(target.getPos, pos) }
   end
 end
 ```
@@ -461,7 +470,8 @@ record PhysicalBody < ECS::Component, raw : PhysEngine::Body do
 end
 ```
 This correctly process SingleFrame, Multiple and Singleton components. 
-The only limitation is that currently `world.delete_all` won't call `when_removed` (this would hurt performance), so use a specialized filter (or query) to delete all components in that case.
+Note that by default `world.delete_all` won't call `when_removed` for performance purposes (and because it doesn't make sense in many cases).
+Use `world.delete_all(with_callbacks: true)` if you need to still call `when_removed` for all components or use specialized filter to delete selected components before delete_all.
 ## Benchmarks
 See [Benchmarks](./Benchmarks.md)
 ## Plans
@@ -474,9 +484,11 @@ See [Benchmarks](./Benchmarks.md)
 - [X] check that all singleframe components are deleted somewhere
 - [X] benchmark comparison with flecs (https://github.com/jemc/crystal-flecs)
 - [ ] groups from EnTT - could be useful?
-- [ ] Serialization 
+- [ ] Serialization
+- [ ] Different contexts to simplify usage of different worlds
 ### Future
 - [X] Callbacks on adding\deleting components
+  - [X] Option to call deletion callbacks when clearing world
 - [ ] Work with arena allocator to minimize usage of GC
 ## Contributors
 - [Andrey Konovod](https://github.com/konovod) - creator and maintainer

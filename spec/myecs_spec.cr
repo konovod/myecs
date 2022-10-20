@@ -854,13 +854,19 @@ describe ECS do
       TestCallbacks.deleted.should eq ["first", "second"]
     end
 
-    pending "when_removed called when world is cleared" do
+    it "when_removed called when world is cleared" do
       world = ECS::World.new
       TestCallbacks.deleted.clear
       ent1 = world.new_entity.add(Pos.new(1, 1)).add(TestCallbacks.new("first"))
       ent2 = world.new_entity.add(TestCallbacks.new("second"))
-      world.delete_all
+      world.delete_all(with_callbacks: true)
       TestCallbacks.deleted.should eq ["first", "second"]
+
+      TestCallbacks.deleted.clear
+      ent1 = world.new_entity.add(Pos.new(1, 1)).add(TestCallbacks.new("first"))
+      ent2 = world.new_entity.add(TestCallbacks.new("second"))
+      world.delete_all(with_callbacks: false)
+      TestCallbacks.deleted.should be_empty
     end
 
     it "when_added and when_removed works with singleframe components" do

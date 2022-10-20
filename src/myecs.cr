@@ -25,17 +25,15 @@ module ECS
   end
 
   # Represents component that doesn't belong to specific entity. Instead, it can be acquired from every entity.
-  annotation SingletonComponent
+  annotation Singleton
   end
 
   # Represents component that can be present on any entity more than once.
-  annotation MultipleComponents
+  annotation Multiple
   end
 
-  private DEFAULT_COMPONENT_POOL_SIZE   =   16
-  private DEFAULT_EVENT_POOL_SIZE       =   16
-  private DEFAULT_EVENT_TOTAL_POOL_SIZE =   16
-  private DEFAULT_ENTITY_POOL_SIZE      = 1024
+  private SMALL_COMPONENT_POOL_SIZE =   16
+  private DEFAULT_ENTITY_POOL_SIZE  = 1024
 
   # Entity Identifier
   alias EntityID = UInt32
@@ -54,7 +52,7 @@ module ECS
     end
 
     # Adds component to the entity.
-    # Will raise if component already exists (and doesn't have `MultipleComponents` annotation)
+    # Will raise if component already exists (and doesn't have `Multiple` annotation)
     def add(comp : Component)
       @world.pool_for(comp).add_component(@id, comp)
       self
@@ -166,7 +164,14 @@ module ECS
 
     protected def grow
       old_size = @size
-      @size = @size * 2
+      @size = case old_size
+              when 0
+                1
+              when 1
+                SMALL_COMPONENT_POOL_SIZE
+              else
+                @size * 2
+              end
       @raw = @raw.to_unsafe.realloc(@size).to_slice(@size)
       @corresponding = @corresponding.to_unsafe.realloc(@size).to_slice(@size)
     end
@@ -251,7 +256,7 @@ module ECS
       end
     end
 
-    def clear
+    def clear(with_callbacks = false)
       @sparse.fill(-1)
       @used = 0
       @cache_entity = NO_ENTITY
@@ -301,7 +306,13 @@ module ECS
     def each_entity(& : EntityID ->)
     end
 
-    def clear
+    def clear(with_callbacks = false)
+      if @used > 0 && @raw.responds_to?(:when_removed)
+        item = @raw
+        if item.responds_to?(:when_removed)
+          item.when_removed(Entity.new(@world, NO_ENTITY))
+        end
+      end
       @used = 0
     end
 
@@ -320,8 +331,14 @@ module ECS
     end
 
     def add_or_update_component(entity, comp)
+      was_empty = @used == 0
       @used = 1
       @raw = comp.as(Component).as(T)
+      if was_empty
+        if comp.responds_to?(:when_added)
+          comp.when_added(Entity.new(@world, entity))
+        end
+      end
     end
 
     def get_component_ptr(entity)
@@ -348,10 +365,7 @@ module ECS
     @raw : Slice(T)
 
     def initialize(@world : World)
-      size = DEFAULT_COMPONENT_POOL_SIZE
-      {% if T.annotation(ECS::SingleFrame) %}
-        size = DEFAULT_EVENT_POOL_SIZE
-      {% end %}
+      size = 0
       super(size, @world)
       @raw = Pointer(T).malloc(@size).to_slice(@size)
     end
@@ -377,7 +391,7 @@ module ECS
     end
 
     def remove_component_without_check(entity)
-      {% if T.annotation(ECS::MultipleComponents) %}
+      {% if T.annotation(ECS::Multiple) %}
         remove_component_without_check_multiple(entity)
       {% else %}
         remove_component_without_check_single(entity)
@@ -389,7 +403,7 @@ module ECS
     end
 
     def add_component_without_check(entity : EntityID, item)
-      {% if T.annotation(ECS::MultipleComponents) %}
+      {% if T.annotation(ECS::Multiple) %}
         @world.inc_count_components(entity) unless has_component?(entity)
       {% else %}
         @world.inc_count_components(entity)
@@ -410,7 +424,7 @@ module ECS
     end
 
     def add_component(entity, comp)
-      {% if !T.annotation(ECS::MultipleComponents) %}
+      {% if !T.annotation(ECS::Multiple) %}
         raise "#{T} already added to #{entity}" if has_component?(entity)
       {% end %}
       {% if T.annotation(ECS::SingleFrame) && (!T.annotation(ECS::SingleFrame).named_args.keys.includes?("check".id) || T.annotation(ECS::SingleFrame)[:check]) %}
@@ -458,6 +472,18 @@ module ECS
       @used.times do |i|
         @raw[i] = Cannon.decode(io, T)
       end
+    end
+
+    def clear(with_callbacks = false)
+      if with_callbacks && @used > 0 && @raw[0].responds_to?(:when_removed)
+        @used.times do |i|
+          item = @raw[i]
+          if item.responds_to?(:when_removed)
+            item.when_removed(Entity.new(@world, @corresponding[i]))
+          end
+        end
+      end
+      super
     end
   end
 
@@ -522,9 +548,9 @@ module ECS
     end
 
     # Deletes all components and entities from the world
-    def delete_all
+    def delete_all(with_callbacks = false)
+      @pools.each &.clear(with_callbacks)
       @free_entities.clear
-      @pools.each &.clear
       @count_components.fill(ENTITY_DELETED)
     end
 
@@ -583,14 +609,14 @@ module ECS
         {% end %}
 
         {% for obj, index in Component.all_subclasses %} 
-          {% if obj.annotation(ECS::SingletonComponent) %}
+          {% if obj.annotation(ECS::Singleton) %}
             @pools[{{COMP_INDICES[obj]}}] = SingletonPool({{obj}}).new(self) 
           {% else %}
             @pools[{{COMP_INDICES[obj]}}] = NormalPool({{obj}}).new(self) 
           {% end %}
 
 
-          {% if obj.annotation(ECS::MultipleComponents) %}
+          {% if obj.annotation(ECS::Multiple) %}
             @@comp_can_be_multiple.add {{obj}}
           {% end %}
         {% end %}
@@ -602,7 +628,7 @@ module ECS
           @pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}}))
         end
 
-        {% if obj.annotation(ECS::SingletonComponent) %}
+        {% if obj.annotation(ECS::Singleton) %}
           {% obj_name = obj.id.split("::").last.id %}
           def get{{obj_name}}
           @pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).get_component?(Entity.new(self, NO_ENTITY)) || raise "{{obj}} was not created"
@@ -670,29 +696,10 @@ module ECS
 
   # General filter class, contain methods existing both in `Filter` (fully functional filter) and `SimpleFilter` (simple stack-allocated filter)
   module AbstractFilter
+    include Enumerable(Entity)
+
     # returns true if entity satisfy filter
     abstract def satisfy(entity : Entity) : Bool
-    # iterates over all entities that match the filter
-    # Note that for `MultipleComponents` same entity can be yielded multiple times, once for each component present on entity
-    abstract def each_entity(& : Entity ->)
-
-    # Returns some entity that match the filter or `nil` if there are no such entities
-    def find_entity?
-      each_entity do |ent|
-        return ent
-      end
-      nil
-    end
-
-    # Returns number of entities that match the filter.
-    # Note that for `MultipleComponents` single entity will be counted multiple times, once for each component present on entity
-    def count_entities
-      n = 0
-      each_entity do
-        n += 1
-      end
-      n
-    end
   end
 
   # Stack allocated filter - can iterate over one component type.
@@ -716,13 +723,13 @@ module ECS
     end
 
     # Returns number of entities that match the filter. (in fact - number of components `typ` in a world)
-    def count_entities
+    def size
       @pool.total_count
     end
 
     # iterates over all entities containing component `typ`
-    # Note that for `MultipleComponents` same entity can be yielded multiple times, once for each component present on entity
-    def each_entity(& : Entity ->)
+    # Note that for `Multiple` same entity can be yielded multiple times, once for each component present on entity
+    def each(& : Entity ->)
       @pool.each_entity do |entity|
         yield(Entity.new(@world, entity))
       end
@@ -755,11 +762,11 @@ module ECS
       multiple = list.find { |typ| @world.can_be_multiple?(typ) }
       if multiple
         if list.count { |typ| @world.can_be_multiple?(typ) } > 1
-          raise "iterating over several MultipleComponents isn't supported: #{list}"
+          raise "iterating over several Multiple isn't supported: #{list}"
         elsif old = @all_multiple_component
-          raise "iterating over several MultipleComponents isn't supported: #{old} and #{multiple}"
+          raise "iterating over several Multiple isn't supported: #{old} and #{multiple}"
         elsif old = @any_multiple_component_index
-          raise "iterating over several MultipleComponents isn't supported: #{@any_of[old]} and #{multiple}"
+          raise "iterating over several Multiple isn't supported: #{@any_of[old]} and #{multiple}"
         else
           @all_multiple_component = multiple
         end
@@ -787,9 +794,9 @@ module ECS
     def of(item : ComponentType)
       if @world.can_be_multiple?(item)
         if old = @all_multiple_component
-          raise "iterating over several MultipleComponents isn't supported: #{old} and #{item}"
+          raise "iterating over several Multiple isn't supported: #{old} and #{item}"
         elsif old = @any_multiple_component_index
-          raise "iterating over several MultipleComponents isn't supported: #{@any_of[old]} and #{item}"
+          raise "iterating over several Multiple isn't supported: #{@any_of[old]} and #{item}"
         else
           @all_multiple_component = item
         end
@@ -809,11 +816,11 @@ module ECS
       multiple = list.find { |typ| @world.can_be_multiple?(typ) }
       if multiple
         if list.count { |typ| @world.can_be_multiple?(typ) } > 1
-          raise "iterating over several MultipleComponents isn't supported: #{list}"
+          raise "iterating over several Multiple isn't supported: #{list}"
         elsif old = @all_multiple_component
-          raise "iterating over several MultipleComponents isn't supported: #{old} and #{multiple}"
+          raise "iterating over several Multiple isn't supported: #{old} and #{multiple}"
         elsif old = @any_multiple_component_index
-          raise "iterating over several MultipleComponents isn't supported: #{@any_of[old]} and #{multiple}"
+          raise "iterating over several Multiple isn't supported: #{@any_of[old]} and #{multiple}"
         else
           @any_multiple_component_index = @any_of.size
           list = list.dup
@@ -828,7 +835,7 @@ module ECS
 
     # Adds a condition that specified Proc must return true when called on entity.
     # Example: `filter.select { |ent| ent.getComp1.size > 1 }`
-    def select(&block : Entity -> Bool)
+    def filter(&block : Entity -> Bool)
       @callbacks << block
       self
     end
@@ -891,8 +898,8 @@ module ECS
     end
 
     # Calls a block once for each entity that match the filter.
-    # Note that for `MultipleComponents` same entity can be called multiple times, once for each component present on entity
-    def each_entity(& : Entity ->)
+    # Note that for `Multiple` same entity can be called multiple times, once for each component present on entity
+    def each(& : Entity ->)
       smallest_all_count = 0
       smallest_any_count = 0
       smallest_all = nil
@@ -1075,7 +1082,7 @@ module ECS
       @children.zip(@filters) do |sys, filter|
         @cur_child = sys
         if filter && sys.active
-          filter.each_entity { |ent| sys.process(ent) }
+          filter.each { |ent| sys.process(ent) }
         end
         sys.do_execute
       end
@@ -1093,8 +1100,8 @@ module ECS
   macro debug_stats
     {% puts "total components: #{Component.all_subclasses.size}" %}
     {% puts "    single frame: #{Component.all_subclasses.select { |x| x.annotation(SingleFrame) }.size}" %}
-    {% puts "    multiple: #{Component.all_subclasses.select { |x| x.annotation(MultipleComponents) }.size}" %}
-    {% puts "    singleton: #{Component.all_subclasses.select { |x| x.annotation(SingletonComponent) }.size}" %}
+    {% puts "    multiple: #{Component.all_subclasses.select { |x| x.annotation(Multiple) }.size}" %}
+    {% puts "    singleton: #{Component.all_subclasses.select { |x| x.annotation(Singleton) }.size}" %}
     {% puts "total systems: #{System.all_subclasses.size}" %}
   end
 end
