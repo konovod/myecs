@@ -900,23 +900,96 @@ describe ECS do
 end
 
 describe ECS::World do
-  it "can be serialized and deserialized" do
+  it "can be serialized and deserialized when empty" do
     world = ECS::World.new
     io = IO::Memory.new
-    ent1 = world.new_entity.add(Pos.new(1, 1)).add(Name.new("first"))
-    ent2 = world.new_entity.add(Pos.new(2, 2)).add(Speed.new(3, 3))
     world.encode io
-    puts io.pos, world.stats
-    world.query(Pos).each do |ent|
-      pp! ent.getPos?, ent.getSpeed?, ent.getName?
-    end
-    puts "~~~~~~"
+    total_size = io.pos
     world2 = ECS::World.new
     io.rewind
     world2.decode io
-    puts io.pos, world.stats
-    world.query(Pos).each do |ent|
-      pp! ent.getPos?, ent.getSpeed?, ent.getName?
+    io.pos.should eq total_size
+    puts "serialization of empty world: #{total_size}"
+  end
+
+  it "can be serialized and deserialized" do
+    world = ECS::World.new
+    io = IO::Memory.new
+    100.times do
+      ent = world.new_entity.add(Pos.new(1, 1))
+      ent.add(Speed.new(3, 3)) if rand < 0.5
+      ent.add(Name.new("Test")) if rand < 0.5
+    end
+    50.times do
+      world.of(Pos).sample.destroy
+    end
+    100.times do
+      ent = world.new_entity.add(Pos.new(1, 1))
+      ent.add(Speed.new(3, 3)) if rand < 0.5
+      ent.add(Name.new("Test")) if rand < 0.5
+    end
+    50.times do
+      world.of(Pos).sample.destroy
+    end
+    world.encode io
+    total_size = io.pos
+    old_stats = world.stats
+    old_values = world.query(Pos).to_a.map do |ent|
+      {ent.getPos?, ent.getSpeed?, ent.getName?}
+    end
+
+    world2 = ECS::World.new
+    io.rewind
+    world2.decode io
+    io.pos.should eq total_size
+    world.stats.should eq old_stats
+    values = world.query(Pos).to_a.map do |ent|
+      {ent.getPos?, ent.getSpeed?, ent.getName?}
+    end
+    values.should eq old_values
+    puts "serialization size: #{total_size}"
+  end
+
+  pending "isn't broken after deserialization" do
+    world = ECS::World.new
+    io = IO::Memory.new
+    100.times do
+      ent = world.new_entity.add(Pos.new(1, 1))
+      ent.add(Speed.new(3, 3)) if rand < 0.5
+      ent.add(Name.new("Test")) if rand < 0.5
+    end
+    50.times do
+      world.of(Pos).sample.destroy
+    end
+    100.times do
+      ent = world.new_entity.add(Pos.new(1, 1))
+      ent.add(Speed.new(3, 3)) if rand < 0.5
+      ent.add(Name.new("Test")) if rand < 0.5
+    end
+    50.times do
+      world.of(Pos).sample.destroy
+    end
+    world.encode io
+
+    world2 = ECS::World.new
+    io.rewind
+    world2.decode io
+
+    100.times do
+      ent = world2.new_entity.add(Pos.new(1, 1))
+      ent.add(Speed.new(3, 3)) if rand < 0.5
+      ent.add(Name.new("Test")) if rand < 0.5
+    end
+    50.times do
+      world2.of(Pos).sample.destroy
+    end
+    100.times do
+      ent = world2.new_entity.add(Pos.new(1, 1))
+      ent.add(Speed.new(3, 3)) if rand < 0.5
+      ent.add(Name.new("Test")) if rand < 0.5
+    end
+    50.times do
+      world2.of(Pos).sample.destroy
     end
   end
 end
