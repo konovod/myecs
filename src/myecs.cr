@@ -645,29 +645,10 @@ module ECS
 
   # General filter class, contain methods existing both in `Filter` (fully functional filter) and `SimpleFilter` (simple stack-allocated filter)
   module AbstractFilter
+    include Enumerable(Entity)
+
     # returns true if entity satisfy filter
     abstract def satisfy(entity : Entity) : Bool
-    # iterates over all entities that match the filter
-    # Note that for `MultipleComponents` same entity can be yielded multiple times, once for each component present on entity
-    abstract def each_entity(& : Entity ->)
-
-    # Returns some entity that match the filter or `nil` if there are no such entities
-    def find_entity?
-      each_entity do |ent|
-        return ent
-      end
-      nil
-    end
-
-    # Returns number of entities that match the filter.
-    # Note that for `MultipleComponents` single entity will be counted multiple times, once for each component present on entity
-    def count_entities
-      n = 0
-      each_entity do
-        n += 1
-      end
-      n
-    end
   end
 
   # Stack allocated filter - can iterate over one component type.
@@ -691,13 +672,13 @@ module ECS
     end
 
     # Returns number of entities that match the filter. (in fact - number of components `typ` in a world)
-    def count_entities
+    def size
       @pool.total_count
     end
 
     # iterates over all entities containing component `typ`
-    # Note that for `MultipleComponents` same entity can be yielded multiple times, once for each component present on entity
-    def each_entity(& : Entity ->)
+    # Note that for `Multiple` same entity can be yielded multiple times, once for each component present on entity
+    def each(& : Entity ->)
       @pool.each_entity do |entity|
         yield(Entity.new(@world, entity))
       end
@@ -803,7 +784,7 @@ module ECS
 
     # Adds a condition that specified Proc must return true when called on entity.
     # Example: `filter.select { |ent| ent.getComp1.size > 1 }`
-    def select(&block : Entity -> Bool)
+    def filter(&block : Entity -> Bool)
       @callbacks << block
       self
     end
@@ -866,8 +847,8 @@ module ECS
     end
 
     # Calls a block once for each entity that match the filter.
-    # Note that for `MultipleComponents` same entity can be called multiple times, once for each component present on entity
-    def each_entity(& : Entity ->)
+    # Note that for `Multiple` same entity can be called multiple times, once for each component present on entity
+    def each(& : Entity ->)
       smallest_all_count = 0
       smallest_any_count = 0
       smallest_all = nil
@@ -1050,7 +1031,7 @@ module ECS
       @children.zip(@filters) do |sys, filter|
         @cur_child = sys
         if filter && sys.active
-          filter.each_entity { |ent| sys.process(ent) }
+          filter.each { |ent| sys.process(ent) }
         end
         sys.do_execute
       end

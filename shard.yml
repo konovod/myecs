@@ -1,9 +1,9 @@
 name: myecs
-version: 0.1.0
+version: 0.2.0
 
 authors:
   - Andrey Konovod <konovod@gmail.com>
 
-crystal: 1.2.0
+crystal: 1.6.0
 
 license: MIT
