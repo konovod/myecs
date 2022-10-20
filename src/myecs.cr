@@ -20,11 +20,11 @@ module ECS
   end
 
   # Represents component that doesn't belong to specific entity. Instead, it can be acquired from every entity.
-  annotation SingletonComponent
+  annotation Singleton
   end
 
   # Represents component that can be present on any entity more than once.
-  annotation MultipleComponents
+  annotation Multiple
   end
 
   private SMALL_COMPONENT_POOL_SIZE =   16
@@ -47,7 +47,7 @@ module ECS
     end
 
     # Adds component to the entity.
-    # Will raise if component already exists (and doesn't have `MultipleComponents` annotation)
+    # Will raise if component already exists (and doesn't have `Multiple` annotation)
     def add(comp : Component)
       @world.pool_for(comp).add_component(@id, comp)
       self
@@ -376,7 +376,7 @@ module ECS
     end
 
     def remove_component_without_check(entity)
-      {% if T.annotation(ECS::MultipleComponents) %}
+      {% if T.annotation(ECS::Multiple) %}
         remove_component_without_check_multiple(entity)
       {% else %}
         remove_component_without_check_single(entity)
@@ -388,7 +388,7 @@ module ECS
     end
 
     def add_component_without_check(entity : EntityID, item)
-      {% if T.annotation(ECS::MultipleComponents) %}
+      {% if T.annotation(ECS::Multiple) %}
         @world.inc_count_components(entity) unless has_component?(entity)
       {% else %}
         @world.inc_count_components(entity)
@@ -409,7 +409,7 @@ module ECS
     end
 
     def add_component(entity, comp)
-      {% if !T.annotation(ECS::MultipleComponents) %}
+      {% if !T.annotation(ECS::Multiple) %}
         raise "#{T} already added to #{entity}" if has_component?(entity)
       {% end %}
       {% if T.annotation(ECS::SingleFrame) && (!T.annotation(ECS::SingleFrame).named_args.keys.includes?("check".id) || T.annotation(ECS::SingleFrame)[:check]) %}
@@ -573,14 +573,14 @@ module ECS
         {% end %}
 
         {% for obj, index in Component.all_subclasses %} 
-          {% if obj.annotation(ECS::SingletonComponent) %}
+          {% if obj.annotation(ECS::Singleton) %}
             @pools[{{COMP_INDICES[obj]}}] = SingletonPool({{obj}}).new(self) 
           {% else %}
             @pools[{{COMP_INDICES[obj]}}] = NormalPool({{obj}}).new(self) 
           {% end %}
 
 
-          {% if obj.annotation(ECS::MultipleComponents) %}
+          {% if obj.annotation(ECS::Multiple) %}
             @@comp_can_be_multiple.add {{obj}}
           {% end %}
         {% end %}
@@ -592,7 +592,7 @@ module ECS
           @pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}}))
         end
 
-        {% if obj.annotation(ECS::SingletonComponent) %}
+        {% if obj.annotation(ECS::Singleton) %}
           {% obj_name = obj.id.split("::").last.id %}
           def get{{obj_name}}
           @pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).get_component?(Entity.new(self, NO_ENTITY)) || raise "{{obj}} was not created"
@@ -730,11 +730,11 @@ module ECS
       multiple = list.find { |typ| @world.can_be_multiple?(typ) }
       if multiple
         if list.count { |typ| @world.can_be_multiple?(typ) } > 1
-          raise "iterating over several MultipleComponents isn't supported: #{list}"
+          raise "iterating over several Multiple isn't supported: #{list}"
         elsif old = @all_multiple_component
-          raise "iterating over several MultipleComponents isn't supported: #{old} and #{multiple}"
+          raise "iterating over several Multiple isn't supported: #{old} and #{multiple}"
         elsif old = @any_multiple_component_index
-          raise "iterating over several MultipleComponents isn't supported: #{@any_of[old]} and #{multiple}"
+          raise "iterating over several Multiple isn't supported: #{@any_of[old]} and #{multiple}"
         else
           @all_multiple_component = multiple
         end
@@ -762,9 +762,9 @@ module ECS
     def of(item : ComponentType)
       if @world.can_be_multiple?(item)
         if old = @all_multiple_component
-          raise "iterating over several MultipleComponents isn't supported: #{old} and #{item}"
+          raise "iterating over several Multiple isn't supported: #{old} and #{item}"
         elsif old = @any_multiple_component_index
-          raise "iterating over several MultipleComponents isn't supported: #{@any_of[old]} and #{item}"
+          raise "iterating over several Multiple isn't supported: #{@any_of[old]} and #{item}"
         else
           @all_multiple_component = item
         end
@@ -784,11 +784,11 @@ module ECS
       multiple = list.find { |typ| @world.can_be_multiple?(typ) }
       if multiple
         if list.count { |typ| @world.can_be_multiple?(typ) } > 1
-          raise "iterating over several MultipleComponents isn't supported: #{list}"
+          raise "iterating over several Multiple isn't supported: #{list}"
         elsif old = @all_multiple_component
-          raise "iterating over several MultipleComponents isn't supported: #{old} and #{multiple}"
+          raise "iterating over several Multiple isn't supported: #{old} and #{multiple}"
         elsif old = @any_multiple_component_index
-          raise "iterating over several MultipleComponents isn't supported: #{@any_of[old]} and #{multiple}"
+          raise "iterating over several Multiple isn't supported: #{@any_of[old]} and #{multiple}"
         else
           @any_multiple_component_index = @any_of.size
           list = list.dup
@@ -1068,8 +1068,8 @@ module ECS
   macro debug_stats
     {% puts "total components: #{Component.all_subclasses.size}" %}
     {% puts "    single frame: #{Component.all_subclasses.select { |x| x.annotation(SingleFrame) }.size}" %}
-    {% puts "    multiple: #{Component.all_subclasses.select { |x| x.annotation(MultipleComponents) }.size}" %}
-    {% puts "    singleton: #{Component.all_subclasses.select { |x| x.annotation(SingletonComponent) }.size}" %}
+    {% puts "    multiple: #{Component.all_subclasses.select { |x| x.annotation(Multiple) }.size}" %}
+    {% puts "    singleton: #{Component.all_subclasses.select { |x| x.annotation(Singleton) }.size}" %}
     {% puts "total systems: #{System.all_subclasses.size}" %}
   end
 end
