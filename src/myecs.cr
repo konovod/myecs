@@ -202,7 +202,7 @@ module ECS
     end
 
     def remove_component(entity, *, dont_gc = false)
-      raise "can't remove component #{self.class} from #{entity}" unless has_component?(entity)
+      raise "can't remove component #{self.class} from #{Entity.new(@world, entity)}" unless has_component?(entity)
       remove_component_without_check(entity)
       @world.dec_count_components(entity, dont_gc)
     end
@@ -425,7 +425,7 @@ module ECS
 
     def add_component(entity, comp)
       {% if !T.annotation(ECS::Multiple) %}
-        raise "#{T} already added to #{entity}" if has_component?(entity)
+        raise "#{T} already added to #{Entity.new(@world, entity)}" if has_component?(entity)
       {% end %}
       {% if T.annotation(ECS::SingleFrame) && (!T.annotation(ECS::SingleFrame).named_args.keys.includes?("check".id) || T.annotation(ECS::SingleFrame)[:check]) %}
         raise "#{T} is created but never deleted" unless @deleter_registered
@@ -456,7 +456,19 @@ module ECS
     def encode(io)
       Cannon.encode(io, @used)
       Cannon.encode(io, @size)
-      Cannon.encode(io, @sparse)
+      Cannon.encode(io, @sparse.size)
+      if @used >= @sparse.size//2
+        Cannon.encode(io, @sparse)
+      else
+        n = 0
+        @sparse.each_with_index do |v, i|
+          next if @sparse[i] == -1
+          n += 1
+          Cannon.encode(io, i)
+          Cannon.encode(io, v)
+        end
+        Cannon.encode(io, -1)
+      end
       @used.times do |i|
         Cannon.encode(io, @corresponding[i])
       end
@@ -468,7 +480,19 @@ module ECS
     def decode(io)
       @used = Cannon.decode(io, typeof(@used))
       @size = Cannon.decode(io, typeof(@size))
-      @sparse = Cannon.decode(io, typeof(@sparse))
+      n = Cannon.decode(io, typeof(@sparse.size))
+      if @used >= n//2
+        @sparse = Cannon.decode(io, typeof(@sparse))
+      else
+        @sparse = Pointer(Int32).malloc(n).to_slice(n)
+        @sparse.fill(-1)
+        @used.times do
+          i = Cannon.decode(io, Int32)
+          v = Cannon.decode(io, Int32)
+          @sparse[i] = v
+        end
+        raise "incorrect sparse count for pool #{self}" unless Cannon.decode(io, Int32) == -1
+      end
       @corresponding = Pointer(EntityID).malloc(@size).to_slice(@size)
       @used.times do |i|
         @corresponding[i] = Cannon.decode(io, EntityID)
