@@ -19,7 +19,7 @@ jobs:
           - {os: windows-latest}
     runs-on: ${{matrix.os}}
     steps:
-      - uses: crystal-lang/install-crystal@v1
+      - uses: crystal-lang/install-crystal
         with:
           crystal: ${{matrix.crystal}}
       - uses: actions/checkout@v2
