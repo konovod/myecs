@@ -16,10 +16,10 @@ jobs:
           - {os: ubuntu-latest, crystal: latest}
           - {os: ubuntu-latest, crystal: nightly}
           - {os: macos-latest}
-          - {os: windows-latest}
+          - {os: windows-latest, crystal: nightly}
     runs-on: ${{matrix.os}}
     steps:
-      - uses: crystal-lang/install-crystal
+      - uses: crystal-lang/install-crystal@v1
         with:
           crystal: ${{matrix.crystal}}
       - uses: actions/checkout@v2
