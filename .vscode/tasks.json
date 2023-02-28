@@ -12,7 +12,7 @@
     {
       "label": "bench",
       "type": "shell",
-      "command": "crystal run --no-color --release bench_ecs.cr",
+      "command": "crystal run --no-color --release benchmarks/bench_ecs.cr --error-trace",
       "problemMatcher": []
     },
   ]

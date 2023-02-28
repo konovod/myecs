@@ -81,7 +81,7 @@ class IterateOverCustomFilterSystem < ECS::System
 
   def execute
     @n = 0
-    @world.query(Comp5).each_entity do
+    @world.query(Comp5).each do
       @n += 1
     end
   end
@@ -141,6 +141,10 @@ class SystemAskComponent(Positive) < ECS::System
   def execute
     @ent.has? Comp1
   end
+
+  def teardown
+    @ent.destroy
+  end
 end
 
 class SystemGetComponent(Positive) < ECS::System
@@ -160,6 +164,10 @@ class SystemGetComponent(Positive) < ECS::System
 
   def execute
     @ent.getComp1?
+  end
+
+  def teardown
+    @ent.destroy
   end
 end
 
@@ -252,7 +260,7 @@ end
 
 class SystemComplexSelectFilter < ECS::System
   def filter(world)
-    world.any_of([Comp1, Comp2]).all_of([Comp3]).exclude(Comp4).select { |ent| ent.id % 10 > 5 }
+    world.any_of([Comp1, Comp2]).all_of([Comp3]).exclude(Comp4).filter { |ent| ent.id % 10 > 5 }
   end
 
   @count = 0
