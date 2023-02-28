@@ -520,7 +520,7 @@ module ECS
 
   # Root level container for all entities / components, is iterated with `ECS::Systems`
   class World
-    @free_entities = LinkedList.new(DEFAULT_ENTITY_POOL_SIZE)
+    @free_entities = EnitiesList.new(DEFAULT_ENTITY_POOL_SIZE)
     protected getter count_components = Slice(UInt16).new(DEFAULT_ENTITY_POOL_SIZE)
     protected getter pools = Array(BasePool).new({{Component.all_subclasses.size}})
 
@@ -548,12 +548,12 @@ module ECS
 
     # total number of alive entities in a world
     def entities_count
-      @free_entities.count - @free_entities.remaining
+      @free_entities.used_entities
     end
 
     # number of entities that could exist in a world before reallocation of pools
     def entities_capacity
-      @free_entities.count
+      @free_entities.capacity
     end
 
     # Creates new entity in a world context.
@@ -561,7 +561,7 @@ module ECS
     # Entity don't take up space without components.
     def new_entity
       if @free_entities.remaining <= 0
-        n = @free_entities.count*2
+        n = @free_entities.capacity*2
         @free_entities.resize(n)
         @count_components = @count_components.to_unsafe.realloc(n).to_slice(n)
         @pools.each &.resize_sparse(n)
@@ -709,9 +709,6 @@ module ECS
       end
     end
 
-    # @free_entities = LinkedList.new(DEFAULT_ENTITY_POOL_SIZE)
-    # protected getter count_components = Slice(UInt16).new(DEFAULT_ENTITY_POOL_SIZE)
-    # protected getter pools = Array(BasePool).new({{Component.all_subclasses.size}})
     def encode(io)
       Cannon.encode(io, @free_entities)
       Cannon.encode(io, @count_components)
@@ -1138,51 +1135,47 @@ module ECS
 end
 
 # :nodoc:
-class ECS::LinkedList
+class ECS::EnitiesList
   include Cannon::Auto
-  @array : Slice(Int32)
-  @root = 0
-  getter remaining = 0
-  getter count = 0
+  @items : Array(Int32)
+  getter last_id = 0
+  getter capacity = 0
 
-  protected def initialize(@array, @root, @remaining, @count)
+  protected def initialize(@items, @last_id, @capacity)
   end
 
-  def initialize(@count : Int32)
-    @remaining = @count
+  def initialize(@capacity)
     # initialize with each element pointing to next
-    @array = Slice(Int32).new(@count) { |i| i + 1 }
+    @items = Array(Int32).new(capacity)
   end
 
   def next_item
-    result = @root
-    raise "linked list empty" if result >= @count
-    @root = @array[@root]
-    @remaining -= 1
-    result
+    # TODO - complex system to make unlimited unshift possible
+    return @items.pop if @items.size > 0
+    raise "out of capacity" if @last_id == @capacity
+    @last_id += 1
+    @last_id - 1
   end
 
   def release(item : Int32)
-    @array[item] = @root
-    @remaining += 1
-    @root = item
+    @items.push(item)
   end
 
   def resize(new_size)
-    raise "shrinking list isn't supported" if new_size < @count
-    @array = @array.to_unsafe.realloc(new_size).to_slice(new_size)
-    (@count...new_size).each do |i|
-      @array[i] = i + 1
-    end
-    @remaining += new_size - @count
-    @count = new_size
+    raise "shrinking list isn't supported" if new_size < @capacity
+    @capacity = new_size
   end
 
   def clear
-    @remaining = @count
-    @count.times do |i|
-      @array[i] = i + 1
-    end
-    @root = 0
+    @last_id = 0
+    @items.clear
+  end
+
+  def used_entities
+    @last_id - @items.size
+  end
+
+  def remaining
+    @items.size + (@capacity - @last_id)
   end
 end
