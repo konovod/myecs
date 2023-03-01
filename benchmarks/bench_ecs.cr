@@ -1,30 +1,34 @@
 require "benchmark"
 require "../src/myecs"
 
+# # UNCOMMENT TO MEASURE RELATIVE CHANGES
+#
 # BASE_LINE =
 #   {
-#     "create empty world"               => 113.88 * 1000,
-#     "create benchmark world"           => 172.70*1000_000,
-#     "create and clear benchmark world" => 212.96*1000_000,
-#     "EmptySystem"                      => 5.11,
-#     "EmptyFilterSystem"                => 26.48,
-#     "SystemAddDeleteSingleComponent"   => 25.59,
-#     "SystemAddDeleteFourComponents"    => 357.63,
-#     "SystemAskComponent(0)"            => 7.99,
-#     "SystemAskComponent(1)"            => 7.99,
-#     "SystemGetComponent(0)"            => 7.54,
-#     "SystemGetComponent(1)"            => 8.65,
-#     "SystemGetSingletonComponent"      => 7.91,
-#     "IterateOverCustomFilterSystem"    => 12.53,
-#     "SystemCountComp1"                 => 3.43 * 1000_000,
-#     "SystemUpdateComp1"                => 8.39 * 1000_000,
-#     "SystemUpdateComp1UsingPtr"        => 4.19 * 1000_000,
-#     "SystemReplaceComps"               => 23.90*1000_000,
-#     "SystemPassEvents"                 => 30.42*1000_000,
-#     "FullFilterSystem"                 => 6.37*1000_000,
-#     "FullFilterAnyOfSystem"            => 8.50*1000_000,
-#     "SystemComplexFilter"              => 3.27*1000_000,
-#     "SystemComplexSelectFilter"        => 3.37*1000_000,
+#     "create empty world"                        => 131.20 * 1000,
+#     "create benchmark world"                    => 164.93*1000_000,
+#     "create and clear benchmark world"          => 211.54*1000_000,
+#     "serialize benchmark world"                 => 264.68*1000_000,
+#     "serialize and deserialize benchmark world" => 373.09*1000_000,
+#     "EmptySystem"                               => 5.11,
+#     "EmptyFilterSystem"                         => 26.80,
+#     "SystemAddDeleteSingleComponent"            => 27.02,
+#     "SystemAddDeleteFourComponents"             => 345.95,
+#     "SystemAskComponent(0)"                     => 7.08,
+#     "SystemAskComponent(1)"                     => 7.04,
+#     "SystemGetComponent(0)"                     => 7.70,
+#     "SystemGetComponent(1)"                     => 8.93,
+#     "SystemGetSingletonComponent"               => 7.33,
+#     "IterateOverCustomFilterSystem"             => 11.98,
+#     "SystemCountComp1"                          => 3.65 * 1000_000,
+#     "SystemUpdateComp1"                         => 9.09 * 1000_000,
+#     "SystemUpdateComp1UsingPtr"                 => 5.04 * 1000_000,
+#     "SystemReplaceComps"                        => 26.44*1000_000,
+#     "SystemPassEvents"                          => 33.40*1000_000,
+#     "FullFilterSystem"                          => 6.23*1000_000,
+#     "FullFilterAnyOfSystem"                     => 7.94*1000_000,
+#     "SystemComplexFilter"                       => 2.93*1000_000,
+#     "SystemComplexSelectFilter"                 => 2.95*1000_000,
 #   }
 
 # module Benchmark
