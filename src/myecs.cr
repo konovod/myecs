@@ -520,7 +520,7 @@ module ECS
 
   # Root level container for all entities / components, is iterated with `ECS::Systems`
   class World
-    @free_entities = EnitiesList.new(DEFAULT_ENTITY_POOL_SIZE)
+    @free_entities = EntitiesList.new(DEFAULT_ENTITY_POOL_SIZE)
     protected getter count_components = Slice(UInt16).new(DEFAULT_ENTITY_POOL_SIZE)
     protected getter pools = Array(BasePool).new({{Component.all_subclasses.size}})
 
@@ -1135,7 +1135,7 @@ module ECS
 end
 
 # :nodoc:
-class ECS::EnitiesList
+class ECS::EntitiesList
   include Cannon::Auto
   @items : Array(Int32)
   getter last_id = 0

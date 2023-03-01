@@ -1,8 +1,8 @@
 require "./spec_helper"
 
-describe ECS::LinkedList do
+describe ECS::EntitiesList do
   it "creates" do
-    list = ECS::LinkedList.new(32)
+    list = ECS::EntitiesList.new(32)
     32.times do |i|
       list.next_item.should eq i
     end
@@ -10,7 +10,7 @@ describe ECS::LinkedList do
   end
 
   it "can release elements" do
-    list = ECS::LinkedList.new(32)
+    list = ECS::EntitiesList.new(32)
     32.times do |i|
       list.next_item
     end
@@ -21,7 +21,7 @@ describe ECS::LinkedList do
   end
 
   it "can release all elements" do
-    list = ECS::LinkedList.new(32)
+    list = ECS::EntitiesList.new(32)
     32.times do |i|
       list.next_item
     end
@@ -42,7 +42,7 @@ describe ECS::LinkedList do
   end
 
   it "can resize" do
-    list = ECS::LinkedList.new(32)
+    list = ECS::EntitiesList.new(32)
     32.times do |i|
       list.next_item
     end
