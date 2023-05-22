@@ -38,6 +38,8 @@ module ECS
   # Entity Identifier
   alias EntityID = UInt32
 
+  alias SparseIndex = Int32
+
   # Identifier that doesn't match any entity
   NO_ENTITY = 0xFFFFFFFFu32
 
@@ -143,23 +145,18 @@ module ECS
     @size : Int32
     @used : Int32 = 0
     @corresponding : Slice(EntityID)
-    @sparse : Slice(Int32)
+    @sparse : PagedArray
     @cache_entity : EntityID = NO_ENTITY
     @cache_index : Int32 = -1
     property deleter_registered = false
 
     def initialize(@size, @world : World)
-      @sparse = Pointer(Int32).malloc(@world.entities_capacity).to_slice(@world.entities_capacity)
-      @sparse.fill(-1)
+      @sparse = PagedArray.new(@world.entities_capacity)
       @corresponding = Pointer(EntityID).malloc(@size).to_slice(@size)
     end
 
     protected def resize_sparse(count)
-      old = @sparse.size
-      @sparse = @sparse.to_unsafe.realloc(count).to_slice(count)
-      (old...count).each do |i|
-        @sparse[i] = -1
-      end
+      @sparse.resize(count)
     end
 
     protected def grow
@@ -257,7 +254,7 @@ module ECS
     end
 
     def clear(with_callbacks = false)
-      @sparse.fill(-1)
+      @sparse.clear
       @used = 0
       @cache_entity = NO_ENTITY
     end
@@ -456,19 +453,7 @@ module ECS
     def encode(io)
       Cannon.encode(io, @used)
       Cannon.encode(io, @size)
-      Cannon.encode(io, @sparse.size)
-      if @used >= @sparse.size//2
-        Cannon.encode(io, @sparse)
-      else
-        n = 0
-        @sparse.each_with_index do |v, i|
-          next if @sparse[i] == -1
-          n += 1
-          Cannon.encode(io, i)
-          Cannon.encode(io, v)
-        end
-        Cannon.encode(io, -1)
-      end
+      @sparse.encode(io, @used)
       @used.times do |i|
         Cannon.encode(io, @corresponding[i])
       end
@@ -480,19 +465,7 @@ module ECS
     def decode(io)
       @used = Cannon.decode(io, typeof(@used))
       @size = Cannon.decode(io, typeof(@size))
-      n = Cannon.decode(io, typeof(@sparse.size))
-      if @used >= n//2
-        @sparse = Cannon.decode(io, typeof(@sparse))
-      else
-        @sparse = Pointer(Int32).malloc(n).to_slice(n)
-        @sparse.fill(-1)
-        @used.times do
-          i = Cannon.decode(io, Int32)
-          v = Cannon.decode(io, Int32)
-          @sparse[i] = v
-        end
-        raise "incorrect sparse count for pool #{self}" unless Cannon.decode(io, Int32) == -1
-      end
+      @sparse.decode(io, @used)
       @corresponding = Pointer(EntityID).malloc(@size).to_slice(@size)
       @used.times do |i|
         @corresponding[i] = Cannon.decode(io, EntityID)
@@ -688,7 +661,7 @@ module ECS
       #   puts "#{comp_name}: #{value}" 
       # end
       # ```
-      def stats(&: String, Int32 ->)
+      def stats(& : String, Int32 ->)
         @pools.each do |pool|
           next if pool.total_count == 0
           yield(pool.name, pool.total_count)
@@ -1177,5 +1150,76 @@ class ECS::EntitiesList
 
   def remaining
     @items.size + (@capacity - @last_id)
+  end
+end
+
+class ECS::PagedArray
+  PAGE_SIZE = 8192
+
+  @slices : Array(Pointer(SparseIndex))
+
+  def initialize(capacity)
+    n = capacity // PAGE_SIZE + 1
+    @slices = Array(Pointer(SparseIndex)).new(n, Pointer(SparseIndex).null)
+  end
+
+  def resize(new_capacity)
+    n = new_capacity // PAGE_SIZE + 1
+    (n - @slices.size).times do
+      @slices << Pointer(SparseIndex).null
+    end
+  end
+
+  def []=(index : Int, value : SparseIndex)
+    page, inpage = index.divmod(PAGE_SIZE)
+    ptr = @slices[page]
+    if ptr.null?
+      ptr = Pointer(SparseIndex).malloc(PAGE_SIZE)
+      ptr.to_slice(PAGE_SIZE).fill(-1)
+      @slices[page] = ptr
+    end
+    ptr[inpage] = value
+  end
+
+  def [](index : Int) : SparseIndex
+    page, inpage = index.divmod(PAGE_SIZE)
+    ptr = @slices[page]
+    return -1 if ptr.null?
+    ptr[inpage]
+  end
+
+  def clear
+    @slices.fill Pointer(SparseIndex).null
+  end
+
+  def encode(io, total)
+    Cannon.encode(io, @slices.size)
+    cnt = 0
+    @slices.each_with_index do |ptr, page|
+      next if ptr.null?
+      ptr.to_slice(PAGE_SIZE).each_with_index do |v, inpage|
+        next if v == -1
+        i = page*PAGE_SIZE + inpage
+        Cannon.encode(io, i)
+        Cannon.encode(io, v)
+        cnt += 1
+      end
+    end
+    raise "BUG: failed to encode sparse" if cnt != total
+    Cannon.encode(io, -1)
+  end
+
+  def decode(io, total)
+    clear
+    n = Cannon.decode(io, Int32)
+    @slices = Array(Pointer(SparseIndex)).new(n, Pointer(SparseIndex).null)
+    maxn = @slices.size * PAGE_SIZE
+    total.times do
+      i = Cannon.decode(io, Int32)
+      v = Cannon.decode(io, Int32)
+      raise "failed to decode sparse" unless (0...maxn).includes? i
+      self[i] = v
+    end
+    raise "incorrect sparse count" unless Cannon.decode(io, Int32) == -1
   end
 end
