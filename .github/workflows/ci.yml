@@ -3,9 +3,9 @@ name: CI
 on:
   push:
   pull_request:
-    branches: [ master ]
+    branches: [master]
   schedule:
-    - cron: '0 6 * * 6'
+    - cron: "0 6 * * 6"
 jobs:
   build:
     name: Test
@@ -13,10 +13,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {os: ubuntu-latest, crystal: latest}
-          - {os: ubuntu-latest, crystal: nightly}
-          - {os: macos-latest}
-          - {os: windows-latest, crystal: nightly}
+          - { os: ubuntu-latest, crystal: latest }
+          - { os: ubuntu-latest, crystal: nightly }
+          - { os: macos-latest }
+          - { os: windows-latest }
     runs-on: ${{matrix.os}}
     steps:
       - uses: crystal-lang/install-crystal@v1
