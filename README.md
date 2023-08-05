@@ -147,7 +147,7 @@ ptr.value.x = 5
 
 ### System
 Сontainer for logic for processing filtered entities. 
-User class can implement `init`, `execute`, `teardown`, `filter` and `process` (in any combination. Just skip methods you don't need).
+User class can implement `init`, `execute`, `teardown`, `filter`, `preprocess` and `process` (in any combination. Just skip methods you don't need).
 ```crystal
 class UserSystem < ECS::System
   # @world : ECS::World - world
@@ -161,12 +161,8 @@ class UserSystem < ECS::System
     # Will be called once during ECS::Systems.init call
   end
 
-  def execute
-    # Will be called on each ECS::Systems.execute call
-  end
-
-  def teardown
-    # Will be called once during ECS::Systems.teardown call
+  def preprocess
+    # Will be called on each ECS::Systems.execute call, before `#process` and `#execute`
   end
 
   def filter(world)
@@ -179,6 +175,15 @@ class UserSystem < ECS::System
     # will be called during each ECS::Systems.execute call, before #execute, 
     # for each entity that match the #filter
   end
+
+  def execute
+    # Will be called on each ECS::Systems.execute call
+  end
+
+  def teardown
+    # Will be called once during ECS::Systems.teardown call
+  end
+
 end
 ```
 
@@ -240,7 +245,7 @@ world.new_entity.add(SomeEvent.new) # this won't raise
 ```
 
 #### ECS::Multiple
-Note above example also shows the use of `@[ECS::Multiple]`. This is for components that can be added multiple times. They have some limitations though - filters can't iterate over more then on type of components with this annotation (as this would usually mean cartesian product, unlikely needed in practice), there is no way to get multiple components outside of filter (it is planned though, but it won't be efficient nor cache-friendly), `delete` deletes all of components on target entity and there is no way to delete only one.
+Note above example also shows the use of `@[ECS::Multiple]`. This is for components that can be added multiple times. They have some limitations though - filters can't iterate over more then one type of components with this annotation (as this would usually mean cartesian product, unlikely needed in practice), there is no way to get multiple components outside of filter (it is planned though, but it won't be efficient nor cache-friendly), `remove` deletes all of components on target entity and there is no way to delete only one.
 `ECS::Multiple` can be combined with `ECS::SingleFrame` but that's not a requirement - there are perfectly correct use cases for `ECS::Multiple` on persistent components - add several sprites to one renderable object or add several weapons to a tank. The only thing is that with current API you won't be able to remove single weapon in that case - only remove all of them. So if you need better control over components just use good old "add an entity with single component and link it to parent entity" approach.
 
 #### ECS::Singleton
@@ -347,6 +352,7 @@ end
 ```
 ### Engine integration
 huh, this is integration with my [nonoengine](https://gitlab.com/kipar/nonoengine):
+(full project is available at https://github.com/konovod/nonoecs-template)
 ```crystal
 # main app:
 require "./ecs"

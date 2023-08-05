@@ -1020,4 +1020,34 @@ it "singleton correctly serialized" do
   world2.getConfig.value.should eq 101
 end
 
+class TestOrderSystem < ECS::System
+  getter list = [] of String
+
+  def execute
+    list << "execute"
+  end
+
+  def filter(world)
+    world.of(Name)
+  end
+
+  def process(entity)
+    list << "process"
+  end
+
+  def preprocess
+    list << "preprocess"
+  end
+end
+
+it "preprocess is called in correct order" do
+  world = ECS::World.new
+  world.new_entity.add(Name.new("1"))
+  sys = TestOrderSystem.new(world)
+  systems = ECS::Systems.new(world).add(sys)
+  systems.init
+  systems.execute
+  sys.list.should eq ["preprocess", "process", "execute"]
+end
+
 ECS.debug_stats

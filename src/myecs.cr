@@ -949,7 +949,7 @@ module ECS
 
   # Сontainer for logic for processing filtered entities.
   # User systems should inherit from `ECS::System`
-  # and implement `init`, `execute`, `teardown`, `filter` and `process` (in any combination. Just skip methods you don't need).
+  # and implement `init`, `execute`, `teardown`, `filter`, `preprocess` and `process` (in any combination. Just skip methods you don't need).
   class System
     # Set `active` property to false to temporarily disable system
     property active = true
@@ -966,12 +966,8 @@ module ECS
     def execute
     end
 
-    protected def do_execute
-      if @active
-        # puts "#{self.class.name} begin"
-        execute
-        # puts "#{self.class.name} end"
-      end
+    # Will be called on each ECS::Systems.execute call, before `#process` and `#execute`
+    def preprocess
     end
 
     # Will be called once during ECS::Systems.teardown call
@@ -1077,15 +1073,17 @@ module ECS
       @started = true
     end
 
-    # calls `execute` and `process` for all active children
+    # calls `preprocess`, `process` and `execute` for all active children
     def execute
       raise "#{@children.map(&.class)} wasn't initialized" unless @started
       @children.zip(@filters) do |sys, filter|
         @cur_child = sys
-        if filter && sys.active
+        next unless sys.active
+        sys.preprocess
+        if filter
           filter.each { |ent| sys.process(ent) }
         end
-        sys.do_execute
+        sys.execute
       end
     end
 
