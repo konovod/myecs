@@ -1,45 +1,45 @@
 require "benchmark"
 require "../src/myecs"
 
-# # UNCOMMENT TO MEASURE RELATIVE CHANGES
-#
-# BASE_LINE =
-#   {
-#     "create empty world"                        => 131.20 * 1000,
-#     "create benchmark world"                    => 164.93*1000_000,
-#     "create and clear benchmark world"          => 211.54*1000_000,
-#     "serialize benchmark world"                 => 264.68*1000_000,
-#     "serialize and deserialize benchmark world" => 373.09*1000_000,
-#     "EmptySystem"                               => 5.11,
-#     "EmptyFilterSystem"                         => 26.80,
-#     "SystemAddDeleteSingleComponent"            => 27.02,
-#     "SystemAddDeleteFourComponents"             => 345.95,
-#     "SystemAskComponent(0)"                     => 7.08,
-#     "SystemAskComponent(1)"                     => 7.04,
-#     "SystemGetComponent(0)"                     => 7.70,
-#     "SystemGetComponent(1)"                     => 8.93,
-#     "SystemGetSingletonComponent"               => 7.33,
-#     "IterateOverCustomFilterSystem"             => 11.98,
-#     "SystemCountComp1"                          => 3.65 * 1000_000,
-#     "SystemUpdateComp1"                         => 9.09 * 1000_000,
-#     "SystemUpdateComp1UsingPtr"                 => 5.04 * 1000_000,
-#     "SystemReplaceComps"                        => 26.44*1000_000,
-#     "SystemPassEvents"                          => 33.40*1000_000,
-#     "FullFilterSystem"                          => 6.23*1000_000,
-#     "FullFilterAnyOfSystem"                     => 7.94*1000_000,
-#     "SystemComplexFilter"                       => 2.93*1000_000,
-#     "SystemComplexSelectFilter"                 => 2.95*1000_000,
-#   }
+# UNCOMMENT TO MEASURE RELATIVE CHANGES
 
-# module Benchmark
-#   module IPS
-#     class Entry
-#       def human_compare
-#         sprintf "%5.2f", BASE_LINE[label] * mean / 1e9
-#       end
-#     end
-#   end
-# end
+BASE_LINE =
+  {
+    "create empty world"                        => 11.23 * 1000,
+    "create benchmark world"                    => 43.71*1000_000,
+    "create and clear benchmark world"          => 43.10*1000_000,
+    "serialize benchmark world"                 => 85.33*1000_000,
+    "serialize and deserialize benchmark world" => 128.19*1000_000,
+    "EmptySystem"                               => 5.05,
+    "EmptyFilterSystem"                         => 26.08,
+    "SystemAddDeleteSingleComponent"            => 31.40,
+    "SystemAddDeleteFourComponents"             => 447.94,
+    "SystemAskComponent(0)"                     => 7.28,
+    "SystemAskComponent(1)"                     => 7.26,
+    "SystemGetComponent(0)"                     => 8.5,
+    "SystemGetComponent(1)"                     => 10.63,
+    "SystemGetSingletonComponent"               => 7.28,
+    "IterateOverCustomFilterSystem"             => 11.90,
+    "SystemCountComp1"                          => 3.50 * 1000_000,
+    "SystemUpdateComp1"                         => 9.15 * 1000_000,
+    "SystemUpdateComp1UsingPtr"                 => 4.59 * 1000_000,
+    "SystemReplaceComps"                        => 27.99*1000_000,
+    "SystemPassEvents"                          => 35.66*1000_000,
+    "FullFilterSystem"                          => 6.50*1000_000,
+    "FullFilterAnyOfSystem"                     => 9.35*1000_000,
+    "SystemComplexFilter"                       => 3.34*1000_000,
+    "SystemComplexSelectFilter"                 => 3.39*1000_000,
+  }
+
+module Benchmark
+  module IPS
+    class Entry
+      def human_compare
+        sprintf "%5.2f", BASE_LINE[label] * mean / 1e9
+      end
+    end
+  end
+end
 
 BENCH_COMPONENTS = 100
 

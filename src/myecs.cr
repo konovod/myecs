@@ -44,91 +44,104 @@ module ECS
   NO_ENTITY = 0xFFFFFFFFu32
 
   # Сontainer for components. Consists from UInt64 and pointer to `World`
+  @[Packed]
   struct Entity
     # ID of entity
     getter id : EntityID
-    # World that contains entity
+
     getter world : World
 
-    protected def initialize(@world, @id)
+    def initialize(@world, @id)
     end
+
+    # getter world_id : UInt16
+    # getter gen : UInt16 = 0
+
+    # # World that contains entity
+    # def world : World
+    #   World.instances[@world_id]
+    # end
+
+    # protected def initialize(aworld, @id)
+    #   @world_id = aworld.world_id
+    # end
 
     # Adds component to the entity.
     # Will raise if component already exists (and doesn't have `Multiple` annotation)
     def add(comp : Component)
-      @world.pool_for(comp).add_component(@id, comp)
+      world.pool_for(comp).add_component(@id, comp)
       self
     end
 
     # Adds component to the entity or update existing component of same type
     def set(comp : Component)
-      @world.pool_for(comp).add_or_update_component(@id, comp)
+      world.pool_for(comp).add_or_update_component(@id, comp)
       self
     end
 
     # Returns true if component of type `typ` exists on the entity
     def has?(typ : ComponentType)
-      @world.base_pool_for(typ).has_component?(@id)
+      world.base_pool_for(typ).has_component?(@id)
     end
 
     # Removes component of type `typ` from the entity. Will raise if component isn't present on entity
     def remove(typ : ComponentType)
-      @world.base_pool_for(typ).remove_component(@id)
+      world.base_pool_for(typ).remove_component(@id)
       self
     end
 
     # Removes component of type `typ` from the entity if it exists. Otherwise, do nothing
     def remove_if_present(typ : ComponentType)
-      @world.base_pool_for(typ).try_remove_component(@id)
+      world.base_pool_for(typ).try_remove_component(@id)
       self
     end
 
     # Deletes component of type `typ` and add component `comp` to the entity
     def replace(typ : ComponentType, comp : Component)
-      @world.base_pool_for(typ).remove_component(@id, dont_gc: true)
+      world.base_pool_for(typ).remove_component(@id, dont_gc: true)
       add(comp)
     end
 
     def inspect(io)
       io << "Entity{" << id << "}["
-      @world.pools.each { |pool| io << pool.name << "," if pool.has_component?(@id) && !pool.is_singleton }
+      world.pools.each { |pool| io << pool.name << "," if pool.has_component?(@id) && !pool.is_singleton }
       io << "]"
     end
 
     # Update existing component of same type on the entity. Will raise if component of this type isn't present.
     def update(comp : Component)
-      @world.pool_for(comp).update_component(@id, comp)
+      world.pool_for(comp).update_component(@id, comp)
     end
 
     # Destroys entity removing all components from it.
     # Entity ID is marked as free and can be reused
     def destroy
-      @world.pools.each do |pool|
-        # break if @world.count_components[@id] <= World::ENTITY_EMPTY #seems to be slower
+      world.pools.each do |pool|
+        # break if world.count_components[@id] <= World::ENTITY_EMPTY #seems to be slower
         pool.try_remove_component(@id, dont_gc: true)
       end
-      @world.gc_entity @id
+      world.gc_entity @id
     end
 
     # Destroys entity if it is empty. It is done automatically when last component is removed
     # So the only use case is when you create entity then want to destroy if no components was added to it.
     def destroy_if_empty
-      @world.check_gc_entity @id
+      world.check_gc_entity @id
     end
 
     macro finished
       {% for obj in Component.all_subclasses %} 
       {% obj_name = obj.id.split("::").last.id %}
       def get{{obj_name}}
-        @world.pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).get_component?(@id) || raise "{{obj}} not present on entity #{self}"
+        world.pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).get_component?(@id) || raise "{{obj}} not present on entity #{self}"
       end
   
       def get{{obj_name}}?
-        @world.pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).get_component?(@id)
+        world.pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).get_component?(@id)
       end
 
       def get{{obj_name}}_ptr
-        @world.pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).get_component_ptr(@id)
+        world.pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).get_component_ptr(@id)
       end
       {% end %}
     end
@@ -506,9 +519,26 @@ module ECS
     # Creates new `Filter` and adds a condition to it
     delegate of, all_of, any_of, exclude, to: new_filter
 
+    getter world_id : UInt16 = 0
+
     # Creates empty world
     def initialize
       init_pools
+      if @@instances.size >= 65536
+        @world_id = UInt16.new(@@ring_index)
+        @@instances[@@ring_index] = self
+        @@ring_index = (@@ring_index + 1) % 65536
+      else
+        @@instances << self
+        @world_id = UInt16.new(@@instances.size - 1)
+      end
+    end
+
+    @@ring_index = 0
+    @@instances = Array(World).new
+
+    def self.instances
+      @@instances
     end
 
     protected def can_be_multiple?(typ : ComponentType)
