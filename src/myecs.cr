@@ -349,12 +349,12 @@ module ECS
 
     def encode(io)
       Cannon.encode(io, @used)
-      Cannon.encode(io, @raw)
+      Cannon.encode(io, @raw) if @used > 0
     end
 
     def decode(io)
       @used = Cannon.decode(io, typeof(@used))
-      @raw = Cannon.decode(io, typeof(@raw))
+      @raw = Cannon.decode(io, typeof(@raw)) if @used > 0
     end
   end
 
