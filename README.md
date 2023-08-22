@@ -259,6 +259,9 @@ class InitConfigSystem < ECS::System
   def init
     config = ...some config initializatio
     @world.new_entity.add(Config.new(config))
+
+    # another way
+    @world.add(Config.new(config)) unless @world.component_exists?(Config)
   end
 end
 

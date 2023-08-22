@@ -635,16 +635,33 @@ module ECS
         {% if obj.annotation(ECS::Singleton) %}
           {% obj_name = obj.id.split("::").last.id %}
           def get{{obj_name}}
-          @pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).get_component?(Entity.new(self, NO_ENTITY)) || raise "{{obj}} was not created"
+          @pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).get_component?(NO_ENTITY) || raise "{{obj}} was not created"
           end
       
           def get{{obj_name}}?
-            @pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).get_component?(Entity.new(self, NO_ENTITY))
+            @pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).get_component?(NO_ENTITY)
           end
     
           def get{{obj_name}}_ptr
-            @pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).get_component_ptr(Entity.new(self, NO_ENTITY))
+            @pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).get_component_ptr(NO_ENTITY)
           end
+
+          def add(comp : {{obj}})
+            @pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).add_component(NO_ENTITY, comp)
+          end
+
+          def set(comp : {{obj}})
+            @pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).add_or_update_component(NO_ENTITY, comp)
+          end
+
+          def remove(typ : {{obj}}.class)
+            @pools[{{COMP_INDICES[obj]}}].remove_component(NO_ENTITY)
+          end
+
+          def remove_if_present(typ : {{obj}}.class)
+            @pools[{{COMP_INDICES[obj]}}].try_remove_component(NO_ENTITY)
+          end
+        
         {% end %}
     
       {% end %}
