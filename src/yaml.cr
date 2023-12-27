@@ -120,7 +120,9 @@ module ECS
   struct Entity
     def self.new(ctx : YAML::ParseContext, node : YAML::Nodes::Node)
       name = String.new(ctx, node)
-      storage = ctx.read_alias(FakeNode.new("_ecs_storage"), EntitiesHash)
+      # storage = ctx.read_alias(FakeNode.new("_ecs_storage"), EntitiesHash)
+      object_id, _ = ctx.@anchors["_ecs_storage"]
+      storage = Pointer(Void).new(object_id).as(EntitiesHash)
       storage.storage[name]
     end
 
@@ -157,16 +159,31 @@ module ECS
 
     def self.new(ctx : YAML::ParseContext, node : YAML::Nodes::Node)
       world = self.new
-      storage = EntitiesHash.new(world)
-      ctx.record_anchor(FakeNode.new("_ecs_storage"), storage)
+      names = EntitiesHash.new(world)
+      ctx.record_anchor(FakeNode.new("_ecs_storage"), names)
       stubs = Hash(String, Array(YAMLComponent)).new(ctx, node)
       stubs.each do |k, v|
-        ent = storage.storage[k]
+        ent = names.storage[k]
         v.each do |comp|
           ent.add(comp)
         end
       end
       world
+    end
+
+    def add_yaml(io, names : EntitiesHash? = nil)
+      names = EntitiesHash.new(self) unless names
+      ctx = YAML::ParseContext.new
+      node = YAML::Nodes.parse(io).nodes.first
+      ctx.record_anchor(FakeNode.new("_ecs_storage"), names)
+      stubs = Hash(String, Array(YAMLComponent)).new(ctx, node)
+      stubs.each do |k, v|
+        ent = names.storage[k]
+        v.each do |comp|
+          ent.add(comp)
+        end
+      end
+      self
     end
   end
 end

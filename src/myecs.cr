@@ -4,6 +4,9 @@ module ECS
   # :nodoc:
   COMP_INDICES = {} of Component.class => Int32
 
+  # :nodoc:
+  WORLD_BEING_LOADED = {} of Fiber => ECS::World
+
   # Component - container for user data without / with small logic inside.
   # All components should be inherited from `ECS::Component`
   @[Packed]
@@ -114,6 +117,16 @@ module ECS
     # So the only use case is when you create entity then want to destroy if no components was added to it.
     def destroy_if_empty
       @world.check_gc_entity @id
+    end
+
+    def to_cannon_io(io)
+      io.write_bytes self.id
+      io
+    end
+
+    def self.from_cannon_io(io) : self
+      id = io.read_bytes(EntityID)
+      self.new(WORLD_BEING_LOADED[Fiber.current], id)
     end
 
     macro finished
@@ -708,7 +721,13 @@ module ECS
     def decode(io)
       @free_entities = Cannon.decode(io, typeof(@free_entities))
       @count_components = Cannon.decode(io, typeof(@count_components))
-      @pools.each &.decode(io)
+      raise "recurrent deserialization is not supported" if WORLD_BEING_LOADED.has_key?(Fiber.current)
+      WORLD_BEING_LOADED[Fiber.current] = self
+      begin
+        @pools.each &.decode(io)
+      ensure
+        WORLD_BEING_LOADED.delete Fiber.current
+      end
     end
   end
 
