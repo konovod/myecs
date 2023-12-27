@@ -21,10 +21,7 @@ it "load world from yaml" do
   world1.new_entity.add(Supported.new(1, 2))
   world1.new_entity.add(Unsupported.new(3, 4))
   yaml = world1.to_yaml
-  world2 = ECS::World.new
-  ECS::YAMLSerializer.prepare(world2)
-  world2.read_yaml(yaml)
-  ECS::YAMLSerializer.reset
+  world2 = ECS::World.from_yaml(yaml)
   world2.query(Supported).first.getSupported.should eq Supported.new(1, 2)
   world2.query(Unsupported).should be_empty
 end

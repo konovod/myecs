@@ -1,6 +1,8 @@
 require "yaml"
 
 module ECS
+  private record FakeNode, anchor : String
+
   abstract struct YAMLComponent < ECS::Component
     include YAML::Serializable
 
@@ -99,26 +101,27 @@ module ECS
     end
   end
 
-  class YAMLSerializer
-    @@entities = Hash(String, Entity).new
+  class EntitiesHash
+    @entities = Hash(String, Entity).new
 
-    def self.prepare(world)
-      @@entities = Hash(String, Entity).new { |h, x| ent = world.new_entity; h[x] = ent; ent }
+    def initialize(world)
+      @entities = Hash(String, Entity).new { |h, x| ent = world.new_entity; h[x] = ent; ent }
     end
 
-    def self.storage
-      @@entities
+    def storage
+      @entities
     end
 
-    def self.reset
-      @@entities = Hash(String, Entity).new
+    def reset
+      @entities = Hash(String, Entity).new
     end
   end
 
   struct Entity
     def self.new(ctx : YAML::ParseContext, node : YAML::Nodes::Node)
       name = String.new(ctx, node)
-      YAMLSerializer.storage[name]
+      storage = ctx.read_alias(FakeNode.new("_ecs_storage"), EntitiesHash)
+      storage.storage[name]
     end
 
     def to_yaml_id(yaml : YAML::Nodes::Builder) : Nil
@@ -152,24 +155,18 @@ module ECS
       end
     end
 
-    def read_yaml(io)
-      stubs = Hash(String, Array(YAMLComponent)).from_yaml(io)
+    def self.new(ctx : YAML::ParseContext, node : YAML::Nodes::Node)
+      world = self.new
+      storage = EntitiesHash.new(world)
+      ctx.record_anchor(FakeNode.new("_ecs_storage"), storage)
+      stubs = Hash(String, Array(YAMLComponent)).new(ctx, node)
       stubs.each do |k, v|
-        ent = YAMLSerializer.storage[k]
+        ent = storage.storage[k]
         v.each do |comp|
           ent.add(comp)
         end
       end
-    end
-
-    def from_yaml_dir(dir)
-      YAMLSerializer.prepare(self)
-      Dir.glob(dir) do |filename|
-        File.open(filename) do |file|
-          read_yaml(file)
-        end
-      end
-      YAMLSerializer.reset
+      world
     end
   end
 end
