@@ -1,3 +1,4 @@
+require "./spec_helper"
 require "../src/yaml"
 
 record Unsupported < ECS::Component, x : Int32, y : Int32

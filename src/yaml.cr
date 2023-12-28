@@ -3,7 +3,7 @@ require "yaml"
 module ECS
   private record FakeNode, anchor : String
 
-  abstract struct YAMLComponent < ECS::Component
+  abstract struct YAMLComponent < Component
     include YAML::Serializable
 
     def self.new(ctx : YAML::ParseContext, node : YAML::Nodes::Node)
