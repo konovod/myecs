@@ -7,13 +7,7 @@ it "serialize world to yaml" do
   world = ECS::World.new
   world.new_entity.add(Supported.new(1, 2))
   world.new_entity.add(Unsupported.new(3, 4))
-  world.to_yaml.should eq "---
-Entity0:
-- type: Supported
-  x: 1
-  y: 2
-Entity1: []
-"
+  YAML.parse(world.to_yaml).to_s.should eq %q[{"Entity0" => [{"type" => "Supported", "x" => 1, "y" => 2}], "Entity1" => []}]
 end
 
 it "load world from yaml" do
