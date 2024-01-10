@@ -481,6 +481,80 @@ end
 This correctly process SingleFrame, Multiple and Singleton components. 
 Note that by default `world.delete_all` won't call `when_removed` for performance purposes (and because it doesn't make sense in many cases).
 Use `world.delete_all(with_callbacks: true)` if you need to still call `when_removed` for all components or use specialized filter to delete selected components before delete_all.
+
+## Serialization
+
+### Binary
+`ECS::World` can be serialized to binary blob using brilliant [Cannon](https://github.com/Papierkorb/cannon) library. This done using `World#encode` and `World#decode`:
+
+```crystal
+  # saves world state to a file.
+  save = File.open("./save", "wb")
+  world.encode save
+  save.close
+
+  # loads world from a file
+  save = File.open("./save", "rb")
+  world = ECS::World.new
+  begin
+    world.decode save
+  rescue ex : Exception
+    error("Savefile is corrupt")
+  ensure
+    save.close
+  end
+```
+
+Of course this is not limited to files, you can use any `IO` to pass it over network etc.
+
+Note that `Cannon` library by design have no ways to check that data are correct, you have to implement it yourself.
+
+Most components can be serialized automatically, but if it doesn't work - define `#to_cannon_io(io)` and `def self.from_cannon_io(io) : self` for a component.
+
+### YAML
+
+There is a also an experimental feature - serialize world to and from YAML format.
+
+Example use case - loading of pregenerated entities.
+
+```crystal
+require "myecs"
+
+# not required by default because not every app needs YAML support
+require "myecs/yaml"
+
+# Only compoonents inherited from `ECS::YAMLComponent` are serialized.
+record ItemSlot < ECS::YAMLComponent, name : String
+record CraftItem < ECS::YAMLComponent, name : String, slots : Array(ECS::Entity)
+record CraftItemStats < ECS::YAMLComponent, cost : Int32, mass : Int32
+
+...
+File.open(filename) do |file|
+  world = ECS::World.from_yaml(file)
+end
+
+puts world.to_yaml
+```
+
+Generated YAML will be a hash, each entry is a `ECS::Entity`.
+
+Keys of hash are used to link to the entities (in case of `to_yaml` keys looks like `Entity1234` but that is not required).
+
+Values are array of components on the entity, each component must have a `type` field that represents class of component.
+
+Example file:
+```YAML
+---
+  slot_energy: [{type: ItemSlot, name: "Power source"}]
+  slot_radio: [{type: ItemSlot, name: "Radio antenna"}]
+  slot_life: [{type: ItemSlot, name: "Life support"}]
+  # note that we can link to any entity by its key
+  item1: [{type: CraftItem, name: "Near space antenna", slots: [slot_radio]}, {type: CraftItemStats, cost: 100, mass: 100}]
+  item2: [{type: CraftItem, name: "Lunar antenna", slots: [slot_radio]}, {type: CraftItemStats, cost: 200, mass: 200}]
+```
+
+Ability to load multiple files (to split "slots" and "items" in this example to different files) is in progress.
+
 ## Benchmarks
 See [Benchmarks](./Benchmarks.md)
 ## Plans
@@ -493,7 +567,7 @@ See [Benchmarks](./Benchmarks.md)
 - [X] check that all singleframe components are deleted somewhere
 - [X] benchmark comparison with flecs (https://github.com/jemc/crystal-flecs)
 - [ ] groups from EnTT - could be useful?
-- [ ] Serialization
+- [X] Serialization
 - [ ] Different contexts to simplify usage of different worlds
 ### Future
 - [X] Callbacks on adding\deleting components
