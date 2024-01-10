@@ -1075,4 +1075,27 @@ it "preprocess is called in correct order" do
   sys.list.should eq ["preprocess", "process", "execute"]
 end
 
+record WithEntity < ECS::Component, link : ECS::Entity
+record WithEntities < ECS::Component, links : Array(ECS::Entity)
+
+it "can serialize components containing ECS::Entity" do
+  world1 = ECS::World.new
+  io = IO::Memory.new
+
+  ent1 = world1.new_entity
+  ent2 = world1.new_entity
+  ent3 = world1.new_entity
+  ent2.add(Pos.new(1, 2))
+  ent1.add(WithEntity.new(ent3))
+  ent3.add(WithEntities.new([ent2]))
+
+  world1.encode io
+
+  world2 = ECS::World.new
+  io.rewind
+  world2.decode io
+
+  world2.query(WithEntity).first.getWithEntity.link.getWithEntities.links[0].getPos.should eq Pos.new(1, 2)
+end
+
 ECS.debug_stats
