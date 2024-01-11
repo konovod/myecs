@@ -24,6 +24,9 @@
   * [Iterating without filter](#iterating-without-filter)
   * [Callbacks](#callbacks)
 * [Benchmarks](#benchmarks)
+* [Serialization](#serialization)
+  * [Binary](#binary)
+  * [YAML](#yaml)
 * [Plans](#plans)
 * [Contributors](#contributors)
 ## Introduction
@@ -563,15 +566,15 @@ See [Benchmarks](./Benchmarks.md)
 - [ ] generations of EntityID to catch usage of deleted entities
 - [ ] better API for multiple components - iterating, array, deleting only one
 - [ ] optimally delete multiple components (linked list)
-- [X] bitmasks for entities. Could they improve performance? - no they don't
-- [X] check that all singleframe components are deleted somewhere
-- [X] benchmark comparison with flecs (https://github.com/jemc/crystal-flecs)
+- [x] bitmasks for entities. Could they improve performance? - no they don't
+- [x] check that all singleframe components are deleted somewhere
+- [x] benchmark comparison with flecs (https://github.com/jemc/crystal-flecs)
 - [ ] groups from EnTT - could be useful?
-- [X] Serialization
+- [x] Serialization
 - [ ] Different contexts to simplify usage of different worlds
 ### Future
-- [X] Callbacks on adding\deleting components
-  - [X] Option to call deletion callbacks when clearing world
+- [x] Callbacks on adding\deleting components
+  - [x] Option to call deletion callbacks when clearing world
 - [ ] Work with arena allocator to minimize usage of GC
 ## Contributors
 - [Andrey Konovod](https://github.com/konovod) - creator and maintainer
