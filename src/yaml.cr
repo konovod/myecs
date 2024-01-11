@@ -1,6 +1,7 @@
 require "yaml"
 
 module ECS
+  # hack to add entities table to the YAML parser
   private record FakeNode, anchor : String
 
   abstract struct YAMLComponent < Component
@@ -35,6 +36,7 @@ module ECS
       {% end %}
     end
 
+    # this is a hack - it copies substancial part of logic from Crystal stdlib just for one thing - automatically serialize `type` field
     def to_yaml(yaml : ::YAML::Nodes::Builder)
       {% begin %}
         {% options = @type.annotation(::YAML::Serializable::Options) %}
@@ -56,8 +58,11 @@ module ECS
         {% end %}
 
         yaml.mapping(reference: self) do
+          # These are two strings that was added
+          # ------------
           "type".to_yaml(yaml)
           self.class.name.to_yaml(yaml)
+          # ------------
           {% for name, value in properties %}
             _{{name}} = @{{name}}
 
