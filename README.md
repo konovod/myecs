@@ -575,6 +575,26 @@ It is possible to load yaml from multiple sources (e.g. to split "slots" and "it
   end
 ```
 
+### Difference
+Binary and YAML serialization has different use cases. This section briefly describes what is different.
+
+Binary:
+ - as fast as possible
+ - as small as possible. Just dump of data in memory
+ - always serialize\deserialize entire world state. 
+ - if some components can't be serialized (contain pointers to external objects such as files or engine), compilation error will be issued.
+ As a solution, you can redefine serialization for such components to no-op and remove them before serialization
+ - don't contain any information about structure of data. Loading from data saved in another version of application (with added\removed\changed component types) will fail in unpredictable way.
+ - intended to just save\restore everything. Use cases - savegames, transmitting over network(WIP).
+
+YAML:
+ - not necessary fast or compact (still should be fast)
+ - will link LibYAML to your binary (statically in case of Windows)
+ - human-readable (and writable) format
+ - only components inherited from ECS::YAMLComponent are saved
+ - can add info to already non-empty world
+ - intended to save\load only what is needed. Use cases - configs, loading of editable game data
+
 ## Benchmarks
 See [Benchmarks](./Benchmarks.md)
 ## Plans
@@ -588,6 +608,7 @@ See [Benchmarks](./Benchmarks.md)
 - [x] benchmark comparison with flecs (https://github.com/jemc/crystal-flecs)
 - [ ] groups from EnTT - could be useful?
 - [x] Serialization
+  - [ ] Flexible control of what components to skip
 - [ ] Different contexts to simplify usage of different worlds
 ### Future
 - [x] Callbacks on adding\deleting components
