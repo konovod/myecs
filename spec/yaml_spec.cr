@@ -49,3 +49,21 @@ it "keep links to entities" do
   world2.add_yaml(yaml)
   world2.query(WithLink).first.getWithLink.link.getWithLink.link.getSupported.should eq Supported.new(1, 2)
 end
+
+it "load yaml from multiple sources" do
+  world = ECS::World.new
+  world = ECS::World.from_yaml do |yaml|
+    yaml.read "{linked1: [{type: Supported, x: 1, y: 2}, {type: WithLink, link: data2}]}"
+    yaml.read "{data1: [{type: Supported, x: 1, y: 2}], data2: [{type: Supported, x: 10, y: 20}],}"
+  end
+  world.query(Supported).size.should eq 3
+  world.query(WithLink).first.getWithLink.link.getSupported.should eq Supported.new(10, 20)
+  world.delete_all
+
+  world.add_yaml do |yaml|
+    yaml.read "{linked1: [{type: Supported, x: 1, y: 2}, {type: WithLink, link: data2}]}"
+    yaml.read "{data1: [{type: Supported, x: 1, y: 2}], data2: [{type: Supported, x: 10, y: 20}],}"
+  end
+  world.query(Supported).size.should eq 3
+  world.query(WithLink).first.getWithLink.link.getSupported.should eq Supported.new(10, 20)
+end

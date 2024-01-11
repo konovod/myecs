@@ -537,7 +537,11 @@ File.open(filename) do |file|
 end
 
 puts world.to_yaml
+
+# Another way is to add yaml data to existing world:
+world.add_yaml(file)
 ```
+Argument passed to deserialization can be either `IO` or `String`
 
 Generated YAML will be a hash, each entry is a `ECS::Entity`.
 
@@ -556,7 +560,20 @@ Example file:
   item2: [{type: CraftItem, name: "Lunar antenna", slots: [slot_radio]}, {type: CraftItemStats, cost: 200, mass: 200}]
 ```
 
-Ability to load multiple files (to split "slots" and "items" in this example to different files) is in progress.
+It is possible to load yaml from multiple sources (e.g. to split "slots" and "items" in a code before). All sources will share the same entity keys, so entities from one source can link to another
+
+```crystal
+  world = ECS::World.from_yaml do |yaml|
+    yaml.read source1
+    yaml.read source2
+  end
+  
+  # or add to existing world:
+  world.add_yaml |yaml|
+    yaml.read file1
+    yaml.read string2
+  end
+```
 
 ## Benchmarks
 See [Benchmarks](./Benchmarks.md)

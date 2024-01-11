@@ -171,14 +171,34 @@ module ECS
       world
     end
 
-    def add_yaml(io, names : EntitiesHash? = nil)
-      names = EntitiesHash.new(self) unless names
+    def add_yaml(io_or_string)
+      YAMLReader.new(self).read(io_or_string)
+    end
+
+    def add_yaml(&)
+      yield(YAMLReader.new(self))
+      self
+    end
+
+    def self.from_yaml(&)
+      self.new.add_yaml { |yaml| yield(yaml) }
+    end
+  end
+
+  struct YAMLReader
+    @names : EntitiesHash
+
+    def initialize(owner)
+      @names = EntitiesHash.new(owner)
+    end
+
+    def read(io_or_string)
       ctx = YAML::ParseContext.new
-      node = YAML::Nodes.parse(io).nodes.first
-      ctx.record_anchor(FakeNode.new("_ecs_storage"), names)
+      node = YAML::Nodes.parse(io_or_string).nodes.first
+      ctx.record_anchor(FakeNode.new("_ecs_storage"), @names)
       stubs = Hash(String, Array(YAMLComponent)).new(ctx, node)
       stubs.each do |k, v|
-        ent = names.storage[k]
+        ent = @names.storage[k]
         v.each do |comp|
           ent.add(comp)
         end
