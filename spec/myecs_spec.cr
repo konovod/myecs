@@ -98,7 +98,7 @@ describe ECS do
     world = ECS::World.new
     ent = world.new_entity
     ent.add(Pos.new(1, 1))
-    expect_raises(Exception) { ent.add(Pos.new(2, 2)) }
+    expect_raises(ECS::Exception) { ent.add(Pos.new(2, 2)) }
   end
 
   it "can set components with same type" do
@@ -210,7 +210,7 @@ describe ECS do
     world.new_entity.add(Pos.new(1, -1)).add(Speed.new(1, 1))
     world.new_entity.add(Speed.new(1, 2))
     world.of(Pos).select { |ent| ent.getPos.y > 0 }.size.should eq 1
-    expect_raises(Exception) { world.new_filter.select { |ent| ent.getPos.y > 0 }.size }
+    expect_raises(ECS::Exception) { world.new_filter.select { |ent| ent.getPos.y > 0 }.size }
   end
 
   it "can found single entity" do
@@ -290,7 +290,7 @@ describe ECS::Systems do
   it "raises if wasn't initialized" do
     world = ECS::World.new
     systems = ECS::Systems.new(world)
-    expect_raises(Exception, "initialized") { systems.execute }
+    expect_raises(ECS::Exception, "initialized") { systems.execute }
   end
 
   it "can process entities" do
@@ -401,7 +401,7 @@ describe ECS::SingleFrame do
     world = ECS::World.new
     systems = ECS::Systems.new(world)
     systems.init
-    expect_raises(Exception) { world.new_entity.add(TestEvent1.new) }
+    expect_raises(ECS::Exception) { world.new_entity.add(TestEvent1.new) }
     systems.remove_singleframe(TestEvent1)
     world.new_entity.add(TestEvent1.new)
     world.of(TestEvent1).size.should eq 1
@@ -456,7 +456,7 @@ describe ECS::Singleton do
 
   it "can be acquired from a world" do
     world = ECS::World.new
-    expect_raises(Exception) { world.getConfig }
+    expect_raises(ECS::Exception) { world.getConfig }
     world.getConfig?.should be_nil
     world.new_entity.add(Config.new(100))
     world.getConfig?.should be_truthy
@@ -466,7 +466,7 @@ describe ECS::Singleton do
 
   it "can be added and deleted from a world" do
     world = ECS::World.new
-    expect_raises(Exception) { world.getConfig }
+    expect_raises(ECS::Exception) { world.getConfig }
     world.getConfig?.should be_nil
     world.add(Config.new(100))
     world.getConfig?.should be_truthy
@@ -581,7 +581,7 @@ describe ECS::Multiple do
     ent.has?(Changer).should be_true
     ent.remove(Changer)
     ent.has?(Changer).should be_false
-    expect_raises(Exception) { ent.remove(Changer) }
+    expect_raises(ECS::Exception) { ent.remove(Changer) }
   end
 
   it "can be iterated" do
@@ -639,10 +639,10 @@ describe ECS::Multiple do
 
   it "can't be iterated when several of them present in filter" do
     world = ECS::World.new
-    expect_raises(Exception) { world.any_of([Changer, Request]) }
-    expect_raises(Exception) { world.all_of([Changer, Request]) }
-    expect_raises(Exception) { world.of(Changer).of(Request) }
-    expect_raises(Exception) { world.any_of([Changer, Pos]).any_of([Request, Speed]) }
+    expect_raises(ECS::Exception) { world.any_of([Changer, Request]) }
+    expect_raises(ECS::Exception) { world.all_of([Changer, Request]) }
+    expect_raises(ECS::Exception) { world.of(Changer).of(Request) }
+    expect_raises(ECS::Exception) { world.any_of([Changer, Pos]).any_of([Request, Speed]) }
     world.of(Changer).exclude(Request).size.should eq 0
   end
 
@@ -758,7 +758,7 @@ describe ECS::World do
     world = ECS::World.new
     ent = world.new_entity.add(Pos.new(1, 1))
     ent.remove(Pos)
-    expect_raises(Exception) { ent.add(Speed.new(1, 1)) }
+    expect_raises(ECS::Exception) { ent.add(Speed.new(1, 1)) }
   end
 
   it "don't hangs if component is just added during iterating on it" do

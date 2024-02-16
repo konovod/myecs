@@ -6,7 +6,7 @@ describe ECS::EntitiesList do
     32.times do |i|
       list.next_item.should eq i
     end
-    expect_raises(Exception) { list.next_item }
+    expect_raises(ECS::Exception) { list.next_item }
   end
 
   it "can release elements" do
@@ -31,14 +31,14 @@ describe ECS::EntitiesList do
     32.times do |i|
       list.next_item.should eq 31 - i
     end
-    expect_raises(Exception) { list.next_item }
+    expect_raises(ECS::Exception) { list.next_item }
     32.times do |i|
       list.release(31 - i)
     end
     32.times do |i|
       list.next_item.should eq i
     end
-    expect_raises(Exception) { list.next_item }
+    expect_raises(ECS::Exception) { list.next_item }
   end
 
   it "can resize" do

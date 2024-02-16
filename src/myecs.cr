@@ -1,6 +1,9 @@
 require "cannon"
 
 module ECS
+  class Exception < ::Exception
+  end
+
   # :nodoc:
   COMP_INDICES = {} of Component.class => Int32
 
@@ -133,7 +136,7 @@ module ECS
       {% for obj in Component.all_subclasses %} 
       {% obj_name = obj.id.split("::").last.id %}
       def get{{obj_name}}
-        @world.pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).get_component?(@id) || raise "{{obj}} not present on entity #{self}"
+        @world.pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).get_component?(@id) || raise Exception.new("{{obj}} not present on entity #{self}")
       end
   
       def get{{obj_name}}?
@@ -212,7 +215,7 @@ module ECS
     end
 
     def remove_component(entity, *, dont_gc = false)
-      raise "can't remove component #{self.class} from #{Entity.new(@world, entity)}" unless has_component?(entity)
+      raise Exception.new("can't remove component #{self.class} from #{Entity.new(@world, entity)}") unless has_component?(entity)
       remove_component_without_check(entity)
       @world.dec_count_components(entity, dont_gc)
     end
@@ -302,7 +305,7 @@ module ECS
     end
 
     def remove_component(entity, *, dont_gc = false)
-      raise "can't remove singleton #{self.class}" if @used == 0
+      raise Exception.new("can't remove singleton #{self.class}") if @used == 0
       item = @raw
       if item.responds_to?(:when_removed)
         item.when_removed(Entity.new(@world, entity))
@@ -435,10 +438,10 @@ module ECS
 
     def add_component(entity, comp)
       {% if !T.annotation(ECS::Multiple) %}
-        raise "#{T} already added to #{Entity.new(@world, entity)}" if has_component?(entity)
+        raise Exception.new("#{T} already added to #{Entity.new(@world, entity)}") if has_component?(entity)
       {% end %}
       {% if T.annotation(ECS::SingleFrame) && (!T.annotation(ECS::SingleFrame).named_args.keys.includes?("check".id) || T.annotation(ECS::SingleFrame)[:check]) %}
-        raise "#{T} is created but never deleted" unless @deleter_registered
+        raise Exception.new("#{T} is created but never deleted") unless @deleter_registered
       {% end %}
       add_component_without_check(entity, comp)
     end
@@ -448,7 +451,7 @@ module ECS
         update_component(entity, comp)
       else
         {% if T.annotation(ECS::SingleFrame) && (!T.annotation(ECS::SingleFrame).named_args.keys.includes?("check".id) || T.annotation(ECS::SingleFrame)[:check]) %}
-          raise "#{T} is created but never deleted" unless @deleter_registered
+          raise Exception.new("#{T} is created but never deleted") unless @deleter_registered
         {% end %}
         add_component_without_check(entity, comp)
       end
@@ -584,7 +587,7 @@ module ECS
 
     @[AlwaysInline]
     protected def inc_count_components(entity_id)
-      raise "adding component to deleted entity: #{entity_id}" if @count_components[entity_id] == ENTITY_DELETED
+      raise Exception.new("adding component to deleted entity: #{entity_id}") if @count_components[entity_id] == ENTITY_DELETED
       @count_components[entity_id] &+= 1
       # raise "BUG: inc_count_components failed" if @count_components[entity_id] > pools.size
     end
@@ -648,7 +651,7 @@ module ECS
         {% if obj.annotation(ECS::Singleton) %}
           {% obj_name = obj.id.split("::").last.id %}
           def get{{obj_name}}
-          @pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).get_component?(NO_ENTITY) || raise "{{obj}} was not created"
+          @pools[{{COMP_INDICES[obj]}}].as(Pool({{obj}})).get_component?(NO_ENTITY) || raise Exception.new("{{obj}} was not created")
           end
       
           def get{{obj_name}}?
@@ -721,7 +724,7 @@ module ECS
     def decode(io)
       @free_entities = Cannon.decode(io, typeof(@free_entities))
       @count_components = Cannon.decode(io, typeof(@count_components))
-      raise "recurrent deserialization is not supported" if WORLD_BEING_LOADED.has_key?(Fiber.current)
+      raise Exception.new("recurrent deserialization is not supported") if WORLD_BEING_LOADED.has_key?(Fiber.current)
       WORLD_BEING_LOADED[Fiber.current] = self
       begin
         @pools.each &.decode(io)
@@ -799,11 +802,11 @@ module ECS
       multiple = list.find { |typ| @world.can_be_multiple?(typ) }
       if multiple
         if list.count { |typ| @world.can_be_multiple?(typ) } > 1
-          raise "iterating over several Multiple isn't supported: #{list}"
+          raise Exception.new("iterating over several Multiple isn't supported: #{list}")
         elsif old = @all_multiple_component
-          raise "iterating over several Multiple isn't supported: #{old} and #{multiple}"
+          raise Exception.new("iterating over several Multiple isn't supported: #{old} and #{multiple}")
         elsif old = @any_multiple_component_index
-          raise "iterating over several Multiple isn't supported: #{@any_of[old]} and #{multiple}"
+          raise Exception.new("iterating over several Multiple isn't supported: #{@any_of[old]} and #{multiple}")
         else
           @all_multiple_component = multiple
         end
@@ -831,9 +834,9 @@ module ECS
     def of(item : ComponentType)
       if @world.can_be_multiple?(item)
         if old = @all_multiple_component
-          raise "iterating over several Multiple isn't supported: #{old} and #{item}"
+          raise Exception.new("iterating over several Multiple isn't supported: #{old} and #{item}")
         elsif old = @any_multiple_component_index
-          raise "iterating over several Multiple isn't supported: #{@any_of[old]} and #{item}"
+          raise Exception.new("iterating over several Multiple isn't supported: #{@any_of[old]} and #{item}")
         else
           @all_multiple_component = item
         end
@@ -848,16 +851,16 @@ module ECS
       if list.size == 1
         return of(list.first)
       end
-      raise "any_of list can't be empty" if list.size == 0
+      raise Exception.new("any_of list can't be empty") if list.size == 0
 
       multiple = list.find { |typ| @world.can_be_multiple?(typ) }
       if multiple
         if list.count { |typ| @world.can_be_multiple?(typ) } > 1
-          raise "iterating over several Multiple isn't supported: #{list}"
+          raise Exception.new("iterating over several Multiple isn't supported: #{list}")
         elsif old = @all_multiple_component
-          raise "iterating over several Multiple isn't supported: #{old} and #{multiple}"
+          raise Exception.new("iterating over several Multiple isn't supported: #{old} and #{multiple}")
         elsif old = @any_multiple_component_index
-          raise "iterating over several Multiple isn't supported: #{@any_of[old]} and #{multiple}"
+          raise Exception.new("iterating over several Multiple isn't supported: #{@any_of[old]} and #{multiple}")
         else
           @any_multiple_component_index = @any_of.size
           list = list.dup
@@ -1099,7 +1102,7 @@ module ECS
     # calls `init` for all children systems
     # also initializes filters for children systems
     def init
-      raise "#{self.class} already initialized" if @started
+      raise Exception.new("#{self.class} already initialized") if @started
       @children.each do |child|
         # puts "#{child.class.name}.init begin"
         child.init
@@ -1111,7 +1114,7 @@ module ECS
 
     # calls `preprocess`, `process` and `execute` for all active children
     def execute
-      raise "#{@children.map(&.class)} wasn't initialized" unless @started
+      raise Exception.new("#{@children.map(&.class)} wasn't initialized") unless @started
       @children.zip(@filters) do |sys, filter|
         @cur_child = sys
         next unless sys.active
@@ -1125,7 +1128,7 @@ module ECS
 
     # calls `teardown` for all children systems
     def teardown
-      raise "#{self.class} not initialized" unless @started
+      raise Exception.new("#{self.class} not initialized") unless @started
       @children.each &.teardown
       @started = false
     end
@@ -1159,7 +1162,7 @@ class ECS::EntitiesList
   def next_item
     # TODO - complex system to make unlimited unshift possible
     return @items.pop if @items.size > 0
-    raise "out of capacity" if @last_id == @capacity
+    raise Exception.new("out of capacity") if @last_id == @capacity
     @last_id += 1
     @last_id - 1
   end
@@ -1169,7 +1172,7 @@ class ECS::EntitiesList
   end
 
   def resize(new_size)
-    raise "shrinking list isn't supported" if new_size < @capacity
+    raise Exception.new("shrinking list isn't supported") if new_size < @capacity
     @capacity = new_size
   end
 
@@ -1251,9 +1254,9 @@ class ECS::PagedArray
     total.times do
       i = Cannon.decode(io, Int32)
       v = Cannon.decode(io, Int32)
-      raise "failed to decode sparse" unless (0...maxn).includes? i
+      raise Exception.new("failed to decode sparse") unless (0...maxn).includes? i
       self[i] = v
     end
-    raise "incorrect sparse count" unless Cannon.decode(io, Int32) == -1
+    raise Exception.new("incorrect sparse count") unless Cannon.decode(io, Int32) == -1
   end
 end
