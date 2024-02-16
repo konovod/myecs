@@ -1160,8 +1160,7 @@ class ECS::EntitiesList
   end
 
   def next_item
-    # TODO - complex system to make unlimited unshift possible
-    return @items.pop if @items.size > 0
+    return @items.shift if @items.size > 0
     raise Exception.new("out of capacity") if @last_id == @capacity
     @last_id += 1
     @last_id - 1

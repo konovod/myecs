@@ -260,7 +260,7 @@ record Config < ECS::Component, values : Hash(String, Int32)
 
 class InitConfigSystem < ECS::System
   def init
-    config = ...some config initializatio
+    config = ...some config initialization
     @world.new_entity.add(Config.new(config))
 
     # another way
@@ -289,7 +289,7 @@ world = ECS::World.new
 world.delete_all
 
 # also delete all entities, but calls `when_removed` callbacks (slower)
-delete_all(with_callbacks: true)
+world.delete_all(with_callbacks: true)
 
 # you can create entity
 entity = world.new_entity

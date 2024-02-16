@@ -29,14 +29,14 @@ describe ECS::EntitiesList do
       list.release(i)
     end
     32.times do |i|
-      list.next_item.should eq 31 - i
+      list.next_item.should eq i
     end
     expect_raises(ECS::Exception) { list.next_item }
     32.times do |i|
       list.release(31 - i)
     end
     32.times do |i|
-      list.next_item.should eq i
+      list.next_item.should eq 31 - i
     end
     expect_raises(ECS::Exception) { list.next_item }
   end
@@ -54,7 +54,7 @@ describe ECS::EntitiesList do
       list.release(i)
     end
     64.times do |i|
-      list.next_item.should eq 63 - i
+      list.next_item.should eq i
     end
     list.resize(128)
     64.times do |i|
@@ -64,7 +64,7 @@ describe ECS::EntitiesList do
       list.release(127 - i)
     end
     128.times do |i|
-      list.next_item.should eq i
+      list.next_item.should eq 127 - i
     end
   end
 end
